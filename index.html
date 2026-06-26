@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <title>CRAWL — The System</title>
+  <meta name="description" content="A dungeon-crawler to-do app. Clear your quests, earn loot, level up." />
+  <meta name="theme-color" content="#0b0e12" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Crawl" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- THE SYSTEM HUD -->
+    <header id="hud">
+      <div class="hud-row">
+        <div class="hud-id">
+          <button id="avatar" class="avatar" title="Your stats" aria-label="Open stats">
+            <span id="avatarLevel">1</span>
+          </button>
+          <div class="hud-meta">
+            <div class="hud-name" id="crawlerName">Crawler</div>
+            <div class="hud-title" id="crawlerTitle">Floor 1 · Fresh Meat</div>
+          </div>
+        </div>
+        <div class="hud-stats">
+          <div class="stat gold" id="goldStat" title="Gold">
+            <span class="stat-ico">◈</span><span id="goldVal">0</span>
+          </div>
+          <div class="stat streak" id="streakStat" title="Daily streak">
+            <span class="stat-ico">✦</span><span id="streakVal">0</span>
+          </div>
+          <button id="helpBtn" class="icon-btn" aria-label="Help and intro">?</button>
+          <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+        </div>
+      </div>
+      <div class="xp-wrap" title="Experience">
+        <div class="xp-bar"><div class="xp-fill" id="xpFill"></div></div>
+        <div class="xp-label"><span id="xpText">0 / 50 XP</span></div>
+      </div>
+    </header>
+
+    <!-- QUICK CAPTURE -->
+    <form id="capture" autocomplete="off">
+      <input id="captureInput" type="text" inputmode="text"
+        placeholder="New quest…  e.g. Slay the laundry tomorrow 6pm !!"
+        aria-label="Add a quest" />
+      <button type="submit" id="addBtn" aria-label="Add quest">＋</button>
+    </form>
+    <div id="parsePreview" class="parse-preview" hidden></div>
+
+    <!-- VIEW TABS -->
+    <nav id="tabs">
+      <button class="tab active" data-view="today">Today<span class="tab-count" id="count-today"></span></button>
+      <button class="tab" data-view="upcoming">Upcoming<span class="tab-count" id="count-upcoming"></span></button>
+      <button class="tab" data-view="backlog">Anytime<span class="tab-count" id="count-backlog"></span></button>
+      <button class="tab" data-view="done">Cleared<span class="tab-count" id="count-done"></span></button>
+    </nav>
+
+    <!-- QUEST LIST -->
+    <main id="list" aria-live="polite"></main>
+
+    <div id="emptyState" class="empty" hidden></div>
+  </div>
+
+  <!-- Floating System log line -->
+  <div id="systemLog" class="system-log" aria-live="polite"></div>
+
+  <!-- Toast / loot popups -->
+  <div id="toastStack" class="toast-stack"></div>
+
+  <!-- Stats / achievements sheet -->
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-card">
+      <button id="sheetClose" class="sheet-close" aria-label="Close">✕</button>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
+  <!-- Level-up overlay -->
+  <div id="levelup" class="levelup" hidden>
+    <div class="levelup-card">
+      <div class="lu-flash">LEVEL UP</div>
+      <div class="lu-num" id="luNum">2</div>
+      <div class="lu-sub" id="luSub">The System acknowledges your effort. Barely.</div>
+      <button id="luClose" class="lu-btn">Descend</button>
+    </div>
+  </div>
+
+  <div id="editModal" class="edit-modal" hidden></div>
+  <div id="intro" class="intro" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
