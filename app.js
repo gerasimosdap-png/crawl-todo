@@ -5,6 +5,8 @@
 'use strict';
 
 const STORE_KEY = 'crawl.v1';
+const DEFAULT_FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbyNRnD_ojNSpmDRcrg0pcCRCjQlzVdX1-9ltUape18a301prkAYNKGXM6hPgKbL4rk1/exec';
+const DEFAULT_GCAL_CLIENT_ID = '136485291900-vib1opnsm8fjlakuk87b4dn3asqsoj58.apps.googleusercontent.com';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
@@ -852,7 +854,7 @@ function openSheet() {
     if ($('#gcalSyncSwitch')) $('#gcalSyncSwitch').onclick = (e) => { S.settings.gcalSync = !S.settings.gcalSync; save(); e.target.classList.toggle('on', S.settings.gcalSync); };
     if ($('#gcalShowSwitch')) $('#gcalShowSwitch').onclick = (e) => { S.settings.gcalShow = !S.settings.gcalShow; save(); e.target.classList.toggle('on', S.settings.gcalShow); render(); };
     if ($('#feedbackUrlInput')) $('#feedbackUrlInput').onchange = (e) => { S.settings.feedbackUrl = (e.target.value || '').trim(); save(); };
-    if ($('#feedbackBtn')) $('#feedbackBtn').onclick = () => { const u = (S.settings.feedbackUrl || '').trim(); if (u) window.open(u, '_blank'); else window.location.href = 'mailto:?subject=' + encodeURIComponent('CRAWL feedback') + '&body=' + encodeURIComponent('What I love / what to improve:\n\n'); };
+    if ($('#feedbackBtn')) $('#feedbackBtn').onclick = () => { const u = (S.settings.feedbackUrl || DEFAULT_FEEDBACK_URL || '').trim(); if (u) window.open(u, '_blank'); else window.location.href = 'mailto:?subject=' + encodeURIComponent('CRAWL feedback') + '&body=' + encodeURIComponent('What I love / what to improve:\n\n'); };
     if ($('#aboutBtn')) $('#aboutBtn').onclick = () => toast('&#128481;', '<b>CRAWL - The System</b><span class="t-sub">v1.0 &middot; no ads, no tracking &middot; your data stays on your device</span>');
   $('#exportBtn').onclick = exportSave;
   $('#importBtn').onclick = importSave;
@@ -992,7 +994,7 @@ function loadGIS() {
 }
 
 async function gcalConnect() {
-  const cid = (S.settings.gcalClientId || '').trim();
+  const cid = (S.settings.gcalClientId || DEFAULT_GCAL_CLIENT_ID || '').trim();
   if (!cid) { alert('First add your Google OAuth Client ID, then tap Connect. Tap "How?" for the 2-minute setup.'); return; }
   if (location.protocol === 'file:') { alert('Google Calendar needs CRAWL opened from a web address (https://...), not a local file. Host it for free first — see the setup guide.'); return; }
   try {
@@ -1063,7 +1065,7 @@ window.gcalPushTask = async function (task) {
 };
 
 async function gcalInitSilent() {
-  const cid = (S.settings.gcalClientId || '').trim();
+  const cid = (S.settings.gcalClientId || DEFAULT_GCAL_CLIENT_ID || '').trim();
   if (!cid || location.protocol === 'file:') return;
   try {
     await loadGIS();
