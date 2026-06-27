@@ -36,7 +36,7 @@
           <div class="stat streak" id="streakStat" title="Daily streak">
             <span class="stat-ico">✦</span><span id="streakVal">0</span>
           </div>
-          <button id="helpBtn" class="icon-btn" aria-label="Help and intro">?</button>
+          <button id="searchBtn" class="icon-btn" aria-label="Search quests">⌕</button>
           <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
         </div>
       </div>
@@ -54,6 +54,10 @@
       <button type="submit" id="addBtn" aria-label="Add quest">＋</button>
     </form>
     <div id="parsePreview" class="parse-preview" hidden></div>
+
+    <div id="searchWrap" class="search-wrap" hidden>
+      <input id="searchInput" type="search" placeholder="Search quests…" aria-label="Search quests" />
+    </div>
 
     <!-- VIEW TABS -->
     <nav id="tabs">

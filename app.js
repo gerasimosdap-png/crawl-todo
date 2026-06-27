@@ -25,7 +25,7 @@ const defaultState = () => ({
   askedNotify: false,
   onboarded: false,
   unlocked: [],
-  settings: { theme: 'dark', sound: true, haptics: true, notify: false, quietStart: 22, quietEnd: 7, gcalClientId: '', gcalConnected: false, gcalSync: false, gcalShow: true, feedbackUrl: '' },
+  settings: { theme: 'dark', sound: true, haptics: true, notify: false, quietStart: 22, quietEnd: 7, gcalClientId: '', gcalConnected: false, gcalSync: false, gcalShow: true, feedbackUrl: '', syncEnabled: false },
   tasks: []
 });
 
@@ -33,6 +33,8 @@ const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-redu
 
 let S = load();
 let currentView = 'today';
+let searchQuery = '';
+let efSubs = [];
 
 function load() {
   try {
@@ -41,7 +43,11 @@ function load() {
     return Object.assign(defaultState(), JSON.parse(raw));
   } catch (e) { return defaultState(); }
 }
-function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {} }
+function save() {
+  if (typeof adoptingRemote === 'undefined' || !adoptingRemote) S.updatedAt = Date.now();
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+  if (typeof fbSchedulePush === 'function') fbSchedulePush();
+}
 
 /* ---------------- XP / Levels ---------------- */
 // XP needed to advance FROM level L to L+1
@@ -172,7 +178,7 @@ function parseQuest(input) {
   if (rm = text.match(/\b(once|twice|thrice|one|two|three|four|five|six|seven|\d+)\s*(?:x|times)?\s*(?:a|per|each|\/)\s*week\b/i)) {
     let n = NUMWORD[rm[1].toLowerCase()] || parseInt(rm[1], 10) || 2; n = Math.max(1, Math.min(7, n));
     const set = COUNTSET[n]; res.repeat = 'wd:' + set.join(','); date = seedWdSet(set); text = text.replace(rm[0], ' ');
-  } else if (/\b(weekends?|every\s*weekend)\b/i.test(text)) { res.repeat = 'wd:0,6'; date = seedWdSet([0,6]); text = text.replace(/\b(weekends?|every\s*weekend)\b/i, ' '); }
+  } else if (/\b(weekends|every\s*weekend)\b/i.test(text)) { res.repeat = 'wd:0,6'; date = seedWdSet([0,6]); text = text.replace(/\b(weekends|every\s*weekend)\b/i, ' '); }
   else if (/\b(weekdays|every\s*weekday|every\s*work\s*day)\b/i.test(text)) { res.repeat = 'weekdays'; date = seedWdSet([1,2,3,4,5]); text = text.replace(/\b(weekdays|every\s*weekday|every\s*work\s*day)\b/i, ' '); }
   else if (rm = text.match(/\bevery\s+other\s+(day|week|month)\b/i)) { const u = rm[1].toLowerCase(); res.repeat = u === 'day' ? 'day2' : u === 'week' ? 'week2' : 'month2'; date = startOfDay(now); text = text.replace(rm[0], ' '); }
   else if (rm = text.match(/\b(?:every|each)\s+(\d+)\s+(days?|weeks?|months?)\b/i)) { const n = Math.max(1, parseInt(rm[1], 10)); const u = rm[2].toLowerCase(); const b = u.indexOf('day') === 0 ? 'day' : u.indexOf('week') === 0 ? 'week' : 'month'; res.repeat = b + (n > 1 ? n : ''); date = startOfDay(now); text = text.replace(rm[0], ' '); }
@@ -191,19 +197,25 @@ function parseQuest(input) {
   if (!date) {
     if (/\btoday\b/i.test(text)) { date = startOfDay(now); text = text.replace(/\btoday\b/i,' '); }
     else if (/\btonight\b/i.test(text)) { date = startOfDay(now); res.hasTime = true; date.setHours(20,0,0,0); text = text.replace(/\btonight\b/i,' '); }
-    else if (/\b(tomorrow|tmr|tmrw)\b/i.test(text)) { date = startOfDay(addDays(now,1)); text = text.replace(/\b(tomorrow|tmr|tmrw)\b/i,' '); }
+    else if (/\b(day after tomorrow|overmorrow)\b/i.test(text)) { date = startOfDay(addDays(now,2)); text = text.replace(/\b(day after tomorrow|overmorrow)\b/i,' '); }
+    else if (/\b(tomorrow|tmr|tmrw|tmo)\b/i.test(text)) { date = startOfDay(addDays(now,1)); text = text.replace(/\b(tomorrow|tmr|tmrw|tmo)\b/i,' '); }
+    else if (/\b(this\s+weekend|weekend)\b/i.test(text)) { date = nextWeekday(now, 6, false); text = text.replace(/\b(this\s+weekend|weekend)\b/i,' '); }
   }
   // in N days/weeks
   const inN = text.match(/\bin\s+(\d+)\s*(day|days|week|weeks|d|w)\b/i);
   if (!date && inN) { const n = +inN[1]; const mult = /w/i.test(inN[2]) ? 7 : 1; date = startOfDay(addDays(now, n*mult)); text = text.replace(inN[0],' '); }
+  const inT = text.match(/\bin\s+(an?|half\s+an?|\d+(?:\.\d+)?)\s*(hours?|hrs?|h|minutes?|mins?|m)\b/i);
+  if (!date && inT) { const w = inT[1].toLowerCase(); let qty = /^an?$/.test(w) ? 1 : /half/.test(w) ? 0.5 : parseFloat(w) || 1; const isHour = /^h/i.test(inT[2]); date = new Date(now.getTime() + qty * (isHour ? 3600000 : 60000)); res.hasTime = true; text = text.replace(inT[0],' '); }
   // next <weekday> / <weekday>
   if (!date) {
-    const nextWd = text.match(/\bnext\s+(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat)\w*/i);
+    const nextWd = text.match(/\bnext\s+(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat)(?:day|s|nesday|rsday|urday)?\b/i);
     const onWd = text.match(/\b(?:on\s+)?(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat)(?:day|s|nesday|rsday|urday)?\b/i);
     if (nextWd) { date = nextWeekday(now, WD[nextWd[1].toLowerCase()], true); text = text.replace(nextWd[0],' '); }
     else if (onWd && WD[onWd[1].toLowerCase()] !== undefined) { date = nextWeekday(now, WD[onWd[1].toLowerCase()], false); text = text.replace(onWd[0],' '); }
   }
   if (!date && /\bnext\s+week\b/i.test(text)) { date = startOfDay(addDays(now,7)); text = text.replace(/\bnext\s+week\b/i,' '); }
+  if (!date && /\bnext\s+month\b/i.test(text)) { const d = new Date(now); d.setMonth(d.getMonth()+1); date = startOfDay(d); text = text.replace(/\bnext\s+month\b/i,' '); }
+  if (!date && /\bnext\s+year\b/i.test(text)) { const d = new Date(now); d.setFullYear(d.getFullYear()+1); date = startOfDay(d); text = text.replace(/\bnext\s+year\b/i,' '); }
   // month + day  (jul 4 / 4 jul / july 4th)
   if (!date) {
     let m = text.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
@@ -221,21 +233,24 @@ function parseQuest(input) {
       if (!isNaN(dd)) { date = startOfDay(dd); text = text.replace(nm[0],' '); } }
   }
 
-  // TIME  3pm / 3:30pm / 15:00 / noon / midnight
-  let tm = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i);
+  // TIME  3pm / 3:30pm / 11.30 / 15:00 / at 11 / noon / midnight
   let hour = null, min = 0;
-  if (tm) { hour = +tm[1] % 12; if (/pm/i.test(tm[3])) hour += 12; min = tm[2] ? +tm[2] : 0; text = text.replace(tm[0],' '); }
-  else { const t24 = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
-    if (t24) { hour = +t24[1]; min = +t24[2]; text = text.replace(t24[0],' '); }
-    else if (/\bnoon\b/i.test(text)) { hour = 12; text = text.replace(/\bnoon\b/i,' '); }
-    else if (/\bmidnight\b/i.test(text)) { hour = 0; text = text.replace(/\bmidnight\b/i,' '); } }
+  let tm = text.match(/\b(?:at\s+)?(\d{1,2})[:.](\d{2})\s*(am|pm)?\b/i);   // 11:30, 11.30, 3:00pm, at 9.15
+  if (tm) { hour = +tm[1]; min = +tm[2]; if (tm[3]) { hour = hour % 12; if (/pm/i.test(tm[3])) hour += 12; } text = text.replace(tm[0],' '); }
+  else if (tm = text.match(/\b(\d{1,2})\s*(am|pm)\b/i)) { hour = +tm[1] % 12; if (/pm/i.test(tm[2])) hour += 12; text = text.replace(tm[0],' '); }
+  else if (tm = text.match(/\bat\s+(\d{1,2})(?!\d)\b/i)) { hour = +tm[1]; text = text.replace(tm[0],' '); }
+  else if (/\bthis\s+morning\b/i.test(text) || (date && /\bmorning\b/i.test(text))) { hour = 9; text = text.replace(/\b(this\s+)?morning\b/i,' '); }
+  else if (/\bthis\s+afternoon\b/i.test(text) || (date && /\bafternoon\b/i.test(text))) { hour = 14; text = text.replace(/\b(this\s+)?afternoon\b/i,' '); }
+  else if (/\bthis\s+evening\b/i.test(text) || (date && /\bevening\b/i.test(text))) { hour = 19; text = text.replace(/\b(this\s+)?evening\b/i,' '); }
+  else if (/\b(?:at\s+)?noon\b/i.test(text)) { hour = 12; text = text.replace(/\b(?:at\s+)?noon\b/i,' '); }
+  else if (/\b(?:at\s+)?midnight\b/i.test(text)) { hour = 0; text = text.replace(/\b(?:at\s+)?midnight\b/i,' '); }
   if (hour !== null) {
     const dayWasImplicit = !date;            // no day keyword/date matched — day came only from the time
     if (!date) date = startOfDay(now);
     date.setHours(hour, min, 0, 0);
     res.hasTime = true;
     // only roll to tomorrow when the day was implied by a bare time that already passed
-    if (dayWasImplicit && date < now && !/today|tonight/i.test(input)) date = addDays(date, 1);
+    if (dayWasImplicit && date < now && !/today|tonight|this/i.test(input)) date = addDays(date, 1);
   }
 
   res.due = date ? date.getTime() : null;
@@ -372,6 +387,13 @@ function spawnNext(task) {
 }
 
 function deleteTask(id) { S.tasks = S.tasks.filter(t => t.id !== id); save(); render(); }
+function efRenderSubs() {
+  const c = $('#ef-subs'); if (!c) return;
+  c.innerHTML = efSubs.map((st, i) => `<div class="ef-subrow"><button type="button" class="ef-subcheck ${st.done?'on':''}" data-i="${i}" aria-label="Toggle"></button><input class="ef-subinput" data-i="${i}" value="${(st.title||'').replace(/"/g,'&quot;')}" placeholder="Sub-task" /><button type="button" class="ef-subdel" data-i="${i}" aria-label="Remove">\u2715</button></div>`).join('');
+  $$('#ef-subs .ef-subcheck').forEach(b => b.onclick = () => { efSubs[+b.dataset.i].done = !efSubs[+b.dataset.i].done; efRenderSubs(); });
+  $$('#ef-subs .ef-subinput').forEach(inp => inp.oninput = () => { efSubs[+inp.dataset.i].title = inp.value; });
+  $$('#ef-subs .ef-subdel').forEach(b => b.onclick = () => { efSubs.splice(+b.dataset.i, 1); efRenderSubs(); });
+}
 function openEditor(task) {
   const m = $('#editModal');
   const d = task.due ? new Date(task.due) : null;
@@ -413,6 +435,11 @@ function openEditor(task) {
       </select>
       <div class="ef-label">Project</div>
       <input class="ef-input" id="ef-project" placeholder="e.g. home, work" value="${(task.project||'')}" />
+      <div class="ef-label">Sub-tasks</div>
+      <div id="ef-subs"></div>
+      <button type="button" class="mini-btn" id="ef-addsub" style="margin-top:8px">+ Add sub-task</button>
+      <div class="ef-label">Notes</div>
+      <textarea class="ef-input" id="ef-notes" placeholder="Anything else to remember..." style="min-height:72px;resize:vertical"></textarea>
       <div class="ef-actions">
         <button type="button" class="ef-del" id="ef-delete">Delete</button>
         <button type="button" class="ef-save" id="ef-save">Save</button>
@@ -420,6 +447,10 @@ function openEditor(task) {
     </div>`;
   m.hidden = false;
   $('#ef-interval').value = intervalSel;
+  efSubs = (task.subtasks || []).map(s => ({ ...s }));
+  efRenderSubs();
+  $('#ef-notes').value = task.notes || '';
+  $('#ef-addsub').onclick = () => { efSubs.push({ id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2,5), title: '', done: false }); efRenderSubs(); setTimeout(() => { const ins = $$('#ef-subs .ef-subinput'); if (ins.length) ins[ins.length-1].focus(); }, 10); };
   $$('#ef-prio .ef-chip').forEach(b => b.onclick = () => { $$('#ef-prio .ef-chip').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });
   $$('#ef-days .ef-chip').forEach(b => b.onclick = () => { b.classList.toggle('sel'); if (document.querySelectorAll('#ef-days .sel').length) $('#ef-interval').value = 'none'; });
   $('#ef-interval').onchange = () => { if ($('#ef-interval').value !== 'none') $$('#ef-days .ef-chip').forEach(x => x.classList.remove('sel')); };
@@ -449,7 +480,9 @@ function saveEditor(task) {
   if (days.length) repeat = (days.length === 5 && days.join(',') === '1,2,3,4,5') ? 'weekdays' : 'wd:' + days.join(',');
   else { const iv = $('#ef-interval').value; repeat = iv === 'none' ? null : iv; }
   const project = ($('#ef-project').value.trim().replace(/^#/, '')) || null;
-  Object.assign(task, { title, due, hasTime, priority, boss, repeat, project, notified: false, xp: (boss ? 40 : 0) + [10,25,18,12][priority] });
+  const subtasks = efSubs.filter(s => (s.title || '').trim()).map(s => ({ id: s.id, title: s.title.trim(), done: !!s.done }));
+  const notes = $('#ef-notes') ? $('#ef-notes').value.trim() : (task.notes || '');
+  Object.assign(task, { title, due, hasTime, priority, boss, repeat, project, notes, subtasks, notified: false, xp: (boss ? 40 : 0) + [10,25,18,12][priority] });
   if (S.settings && S.settings.gcalSync && task.due && window.gcalPushTask) window.gcalPushTask(task);
   save(); closeEditor(); render();
 }
@@ -516,6 +549,18 @@ function render() {
   $('#count-backlog').textContent = active.filter(t => t.due == null).length || '';
   $('#count-done').textContent = '';
 
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    const m = t => (t.title||'').toLowerCase().includes(q) || (t.notes||'').toLowerCase().includes(q) || (t.project||'').toLowerCase().includes(q) || (t.subtasks||[]).some(s => (s.title||'').toLowerCase().includes(q));
+    const res = S.tasks.filter(m).sort((a,b) => (a.done - b.done) || ((a.due||9e15) - (b.due||9e15)));
+    if (!res.length) { const e = $('#emptyState'); e.innerHTML = '<div class="glyph">\u{1F50D}</div><div class="line">No quests match \u201c' + searchQuery.replace(/</g,'&lt;') + '\u201d.</div>'; e.hidden = false; return; }
+    empty.hidden = true;
+    const head = document.createElement('div'); head.className = 'group-head'; head.textContent = 'Results (' + res.length + ')';
+    list.appendChild(head);
+    res.forEach(t => list.appendChild(questEl(t)));
+    return;
+  }
+
   let groups = [];
   if (currentView === 'today') {
     const overdue = active.filter(t => t.due != null && t.due < sod).sort(byDue);
@@ -570,6 +615,9 @@ function questEl(t) {
   if (t.due) { const dc = dueClass(t.due); const dlabel = dc === 'overdue' ? '⚠ ' : '⏱ '; meta.push(`<span class="q-tag due ${dc}">${dlabel}${fmtDue(t.due, t.hasTime)}</span>`); }
   if (t.repeat) meta.push(`<span class="q-tag repeat">↻ ${repeatLabel(t.repeat)}</span>`);
   if (t.project) meta.push(`<span class="q-tag project">#${t.project}</span>`);
+  const subs = t.subtasks || [];
+  if (subs.length) { const d = subs.filter(s => s.done).length; meta.push(`<span class="q-tag subs">\u2611 ${d}/${subs.length}</span>`); }
+  if (t.notes) meta.push('<span class="q-tag note" title="Has notes">\u{1F4DD}</span>');
 
   el.innerHTML = `
     <button class="check" aria-label="Clear quest">
@@ -577,13 +625,19 @@ function questEl(t) {
     </button>
     <div class="q-body">
       <div class="q-title"></div>
-      <div class="q-meta">${meta.join('')}${t.done ? '' : `<span class="q-xp">+${t.xp} XP</span>`}</div>
+      <div class="q-meta">${meta.join('')}</div>
+      ${subs.length ? `<div class="q-subs">${subs.map(s => `<button type="button" class="q-sub ${s.done?'done':''}" data-st="${s.id}"><span class="q-sub-box"></span><span class="q-sub-t"></span></button>`).join('')}</div>` : ''}
     </div>
     <div class="q-actions">
       <button class="edit" aria-label="Edit">✎</button>
       <button class="del" aria-label="Delete">✕</button>
     </div>`;
   el.querySelector('.q-title').textContent = t.title;
+  if (subs.length) el.querySelectorAll('.q-sub').forEach(btn => {
+    const st = subs.find(s => s.id === btn.dataset.st);
+    if (st) btn.querySelector('.q-sub-t').textContent = st.title;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); if (st) { st.done = !st.done; save(); render(); } });
+  });
 
   el.querySelector('.check').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -803,6 +857,10 @@ function openSheet() {
     <div class="opt-row"><div class="lbl">Haptics <small>Vibrate on clear &amp; level up (Android)</small></div>
       <button class="switch ${S.settings.haptics?'on':''}" id="hapticSwitch"></button></div>
     <div class="opt-row" style="display:block">
+      <div class="lbl" style="margin-bottom:6px">Cross-device sync <small>Back up &amp; sync your quests with your Google account</small></div>
+      ${syncSettingsHtml()}
+    </div>
+    <div class="opt-row" style="display:block">
       <div class="lbl" style="margin-bottom:6px">Google Calendar <small>Show your events here &amp; push timed quests to your calendar</small></div>
       ${gcalSettingsHtml()}
     </div>
@@ -828,6 +886,7 @@ function openSheet() {
       <div class="btn-line">
         <button class="mini-btn" id="feedbackBtn">&#9993; Send feedback</button>
         <button class="mini-btn" id="aboutBtn">About CRAWL</button>
+        <button class="mini-btn" id="howtoBtn">How to use</button>
       </div>
     </div>
     <div class="field-help">
@@ -856,6 +915,9 @@ function openSheet() {
     if ($('#feedbackUrlInput')) $('#feedbackUrlInput').onchange = (e) => { S.settings.feedbackUrl = (e.target.value || '').trim(); save(); };
     if ($('#feedbackBtn')) $('#feedbackBtn').onclick = () => { const u = (S.settings.feedbackUrl || DEFAULT_FEEDBACK_URL || '').trim(); if (u) window.open(u, '_blank'); else window.location.href = 'mailto:?subject=' + encodeURIComponent('CRAWL feedback') + '&body=' + encodeURIComponent('What I love / what to improve:\n\n'); };
     if ($('#aboutBtn')) $('#aboutBtn').onclick = () => toast('&#128481;', '<b>CRAWL - The System</b><span class="t-sub">v1.0 &middot; no ads, no tracking &middot; your data stays on your device</span>');
+    if ($('#syncSignIn')) $('#syncSignIn').onclick = () => fbSignIn();
+    if ($('#syncSignOut')) $('#syncSignOut').onclick = () => fbSignOut();
+    if ($('#howtoBtn')) $('#howtoBtn').onclick = () => { $('#sheet').hidden = true; openIntro(false); };
   $('#exportBtn').onclick = exportSave;
   $('#importBtn').onclick = importSave;
   $('#resetBtn').onclick = () => { if (confirm('Wipe ALL progress and quests? The System will not mourn you.')) { localStorage.removeItem(STORE_KEY); S = defaultState(); applyTheme(); $('#sheet').hidden = true; render(); } };
@@ -917,8 +979,14 @@ function init() {
   $('#sheetClose').addEventListener('click', () => $('#sheet').hidden = true);
   $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') $('#sheet').hidden = true; });
   $('#luClose').addEventListener('click', () => $('#levelup').hidden = true);
-  $('#helpBtn').addEventListener('click', () => openIntro(false));
+  { const hb = $('#helpBtn'); if (hb) hb.addEventListener('click', () => openIntro(false)); }
+  $('#searchBtn').addEventListener('click', () => {
+    const w = $('#searchWrap'); w.hidden = !w.hidden;
+    if (!w.hidden) { $('#searchInput').focus(); } else { searchQuery = ''; $('#searchInput').value = ''; render(); }
+  });
+  $('#searchInput').addEventListener('input', (e) => { searchQuery = e.target.value.trim(); render(); });
   if (S.settings.gcalConnected) gcalInitSilent();
+  if (S.settings.syncEnabled) fbInit();
 
   // keyboard shortcuts (desktop)
   document.addEventListener('keydown', (e) => {
@@ -1054,9 +1122,11 @@ async function gcalSyncNow() {
 window.gcalPushTask = async function (task) {
   const tok = await gcalEnsureToken(); if (!tok || !task.due) return;
   const start = new Date(task.due);
+  const pad = (n) => String(n).padStart(2, '0');
+  const localDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const body = task.hasTime
     ? { summary: task.title, start: { dateTime: start.toISOString() }, end: { dateTime: new Date(task.due + 3600000).toISOString() } }
-    : { summary: task.title, start: { date: start.toISOString().slice(0, 10) }, end: { date: start.toISOString().slice(0, 10) } };
+    : { summary: task.title, start: { date: localDate(start) }, end: { date: localDate(new Date(task.due + 86400000)) } };
   try {
     await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events',
       { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -1092,5 +1162,115 @@ function openGcalHelp() {
   el.hidden = false;
   $('#ghDone').onclick = () => { el.hidden = true; };
 }
+
+/* ---------------- Cross-device sync (Firebase, optional) ---------------- */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCeqo307v6YKZjSYrnUGyNta95BXspisMM',
+  authDomain: 'compact-cell-500621-i6.firebaseapp.com',
+  projectId: 'compact-cell-500621-i6',
+  storageBucket: 'compact-cell-500621-i6.firebasestorage.app',
+  messagingSenderId: '136485291900',
+  appId: '1:136485291900:web:3c48db3c0ab0b02614c6f9'
+};
+let fbAuth = null, fbDb = null, fbUser = null, fbUnsub = null, fbReady = false, adoptingRemote = false, pushTimer = null;
+
+function loadFirebase() {
+  return new Promise((resolve, reject) => {
+    if (window.firebase && window.firebase.firestore) return resolve();
+    const base = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    const files = ['firebase-app-compat.js', 'firebase-auth-compat.js', 'firebase-firestore-compat.js'];
+    let i = 0;
+    const next = () => {
+      if (i >= files.length) return resolve();
+      const s = document.createElement('script');
+      s.src = base + files[i++]; s.onload = next;
+      s.onerror = () => reject(new Error('Could not load sync (check your connection).'));
+      document.head.appendChild(s);
+    };
+    next();
+  });
+}
+
+async function fbInit() {
+  if (fbReady) return;
+  await loadFirebase();
+  if (!window.firebase.apps.length) window.firebase.initializeApp(FIREBASE_CONFIG);
+  fbAuth = window.firebase.auth(); fbDb = window.firebase.firestore();
+  fbReady = true;
+  fbAuth.onAuthStateChanged((u) => {
+    fbUser = u;
+    S.settings.syncEnabled = !!u; save();
+    if (u) fbStartSync(); else fbStopSync();
+    updateSyncUI();
+  });
+}
+
+async function fbSignIn() {
+  try {
+    await fbInit();
+    if (location.protocol === 'file:') { alert('Sync needs CRAWL opened from a web address (https://...), not a local file.'); return; }
+    await fbAuth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
+  } catch (e) {
+    if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request')) {
+      try { await fbAuth.signInWithRedirect(new window.firebase.auth.GoogleAuthProvider()); } catch (_) {}
+    } else if (e && e.code !== 'auth/popup-closed-by-user') {
+      alert('Sign-in failed: ' + (e.message || e));
+    }
+  }
+}
+async function fbSignOut() { try { await fbAuth.signOut(); } catch (e) {} }
+
+function fbDocRef() { return fbDb.collection('users').doc(fbUser.uid); }
+
+async function fbStartSync() {
+  if (!fbUser) return;
+  try {
+    const snap = await fbDocRef().get();
+    if (snap.exists) {
+      const d = snap.data();
+      if (d && d.updatedAt && (!S.updatedAt || d.updatedAt > S.updatedAt)) adoptRemote(d);
+      else fbPushNow();
+    } else { fbPushNow(); }
+    if (fbUnsub) fbUnsub();
+    fbUnsub = fbDocRef().onSnapshot((s) => {
+      if (!s.exists) return;
+      const d = s.data();
+      if (d && d.updatedAt && d.updatedAt > (S.updatedAt || 0)) adoptRemote(d);
+    });
+    systemLog('<span class="sys-prefix">[SYSTEM]</span> Synced. Your quests now travel with you.');
+  } catch (e) { /* offline — local stays primary */ }
+}
+function fbStopSync() { if (fbUnsub) { fbUnsub(); fbUnsub = null; } }
+
+function adoptRemote(d) {
+  try {
+    const remote = JSON.parse(d.data);
+    adoptingRemote = true;
+    S = Object.assign(defaultState(), remote);
+    S.updatedAt = d.updatedAt;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+    adoptingRemote = false;
+    applyTheme(); updateHUD(); render();
+  } catch (e) { adoptingRemote = false; }
+}
+
+function fbPushNow() {
+  if (!fbUser || !fbReady) return;
+  try { fbDocRef().set({ data: JSON.stringify(S), updatedAt: S.updatedAt || Date.now() }); } catch (e) {}
+}
+function fbSchedulePush() {
+  if (!fbUser || adoptingRemote) return;
+  clearTimeout(pushTimer); pushTimer = setTimeout(fbPushNow, 800);
+}
+
+function syncSettingsHtml() {
+  if (fbUser) {
+    return `<div class="btn-line"><span class="gcal-pill">&#9679; Synced</span><button class="mini-btn danger" id="syncSignOut">Sign out</button></div>
+      <div class="field-help" style="margin-top:6px">Signed in as <b>${(fbUser.email || 'your account').replace(/</g, '&lt;')}</b>. Your quests sync across every device you sign in on.</div>`;
+  }
+  return `<div class="btn-line"><button class="mini-btn" id="syncSignIn">&#128274; Sign in with Google to sync</button></div>
+    <div class="field-help" style="margin-top:6px">Back up your quests and keep them in sync across phone &amp; laptop. Free.</div>`;
+}
+function updateSyncUI() { const sh = $('#sheet'); if (sh && !sh.hidden) openSheet(); }
 
 document.addEventListener('DOMContentLoaded', init);
