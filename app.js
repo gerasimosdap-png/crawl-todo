@@ -175,7 +175,12 @@ function parseQuest(input) {
   const COUNTSET = { 1:[3], 2:[1,4], 3:[1,3,5], 4:[1,2,4,5], 5:[1,2,3,4,5], 6:[1,2,3,4,5,6], 7:[0,1,2,3,4,5,6] };
   const NUMWORD = { once:1, one:1, twice:2, two:2, thrice:3, three:3, four:4, five:5, six:6, seven:7 };
   let rm;
-  if (rm = text.match(/\b(once|twice|thrice|one|two|three|four|five|six|seven|\d+)\s*(?:x|times)?\s*(?:a|per|each|\/)\s*week\b/i)) {
+  const ORD = { first:1, '1st':1, second:2, '2nd':2, third:3, '3rd':3, fourth:4, '4th':4, fifth:5, '5th':5, last:-1 };
+  let mm2;
+  if (mm2 = text.match(/\b(first|second|third|fourth|fifth|last|1st|2nd|3rd|4th|5th)\s+(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat)(?:day|s|nesday|rsday|urday)?\s+of\s+(?:the\s+|each\s+|every\s+)?month\b/i)) {
+    const ord = ORD[mm2[1].toLowerCase()]; const wd = WD[mm2[2].toLowerCase()];
+    res.repeat = 'mwd:' + ord + ':' + wd; date = nextNthWeekday(now, ord, wd); text = text.replace(mm2[0], ' ');
+  } else if (rm = text.match(/\b(once|twice|thrice|one|two|three|four|five|six|seven|\d+)\s*(?:x|times)?\s*(?:a|per|each|\/)\s*week\b/i)) {
     let n = NUMWORD[rm[1].toLowerCase()] || parseInt(rm[1], 10) || 2; n = Math.max(1, Math.min(7, n));
     const set = COUNTSET[n]; res.repeat = 'wd:' + set.join(','); date = seedWdSet(set); text = text.replace(rm[0], ' ');
   } else if (/\b(weekends|every\s*weekend)\b/i.test(text)) { res.repeat = 'wd:0,6'; date = seedWdSet([0,6]); text = text.replace(/\b(weekends|every\s*weekend)\b/i, ' '); }
@@ -263,6 +268,23 @@ function nextWeekday(from, target, forceNext) {
   let delta = (target - d.getDay() + 7) % 7;   // days until the coming <weekday>
   if (delta === 0) delta = forceNext ? 7 : 0;  // same weekday: "next X" => +7, "on X" => today
   return addDays(d, delta);
+}
+function nthWeekdayOfMonth(year, month, ord, wd) {
+  if (ord > 0) {
+    const first = new Date(year, month, 1);
+    const day = 1 + ((wd - first.getDay() + 7) % 7) + (ord - 1) * 7;
+    const d = new Date(year, month, day);
+    return d.getMonth() === month ? d : null;
+  }
+  const last = new Date(year, month + 1, 0);
+  const day = last.getDate() - ((last.getDay() - wd + 7) % 7);
+  return new Date(year, month, day);
+}
+function nextNthWeekday(from, ord, wd) {
+  const base = startOfDay(from);
+  let y = base.getFullYear(), m = base.getMonth(), d = nthWeekdayOfMonth(y, m, ord, wd), guard = 0;
+  while ((!d || startOfDay(d) < base) && guard++ < 14) { m++; if (m > 11) { m = 0; y++; } d = nthWeekdayOfMonth(y, m, ord, wd); }
+  return d ? startOfDay(d) : base;
 }
 
 /* ---------------- Date formatting ---------------- */
@@ -376,6 +398,7 @@ function spawnNext(task) {
   else if (mm = /^month(\d+)$/.exec(r)) { next = new Date(base); next.setMonth(next.getMonth() + +mm[1]); }
   else if (r === 'year') { next = new Date(base); next.setFullYear(next.getFullYear() + 1); }
   else if (r === 'weekdays') { do { next = addDays(next, 1); } while (next.getDay() === 0 || next.getDay() === 6); }
+  else if (mm = /^mwd:(-?\d+):(\d+)$/.exec(r)) { next = nextNthWeekday(addDays(base, 1), +mm[1], +mm[2]); }
   else if (r && r.startsWith('wd:')) { const set = r.slice(3).split(',').map(Number); do { next = addDays(next, 1); } while (!set.includes(next.getDay())); }
   else next = addDays(base, 7);
   S.tasks.unshift({
@@ -661,6 +684,7 @@ function repeatLabel(r) {
   if (m = /^month(\d+)$/.exec(r)) return 'every ' + m[1] + ' months';
   if (r === 'year') return 'yearly';
   if (r === 'weekdays') return 'weekdays';
+  if (m = /^mwd:(-?\d+):(\d+)$/.exec(r)) { const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const ords = {'1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th','-1':'last'}; return (ords[m[1]] || m[1]) + ' ' + names[+m[2]] + ' of month'; }
   if (r.startsWith('wd:')) {
     if (r === 'wd:0,6') return 'weekends';
     const names = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];

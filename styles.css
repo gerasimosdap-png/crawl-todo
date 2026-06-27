@@ -459,3 +459,7 @@ body { background: var(--bg); }
 body.focus .stat.gold, body.focus .stat.streak, body.focus .xp-wrap, body.focus .hud-title { display: none !important; }
 body.focus .avatar::after { display: none; }
 .stat-ico svg { display: block; }
+
+
+/* Light theme: darker accent for contrast on white */
+[data-theme="light"] { --sys:#1d9e75; --sys-glow:rgba(29,158,117,.30); }
