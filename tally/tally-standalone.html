@@ -433,6 +433,19 @@ body {
 .celebrate-why { font-size: .82rem; color: var(--muted); line-height: 1.55; text-align: left; margin: 0 0 20px; }
 .reward-hint { font-size: .78rem; color: var(--muted); line-height: 1.5; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 
+/* date pickers + date tags */
+.date-row { display: flex; gap: 10px; }
+.date-col { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.date-lbl { font-size: .72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.date-col input[type="date"] { width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 11px; font-size: .95rem; font-family: inherit; }
+.tag.overdue { color: #b4524f; background: color-mix(in srgb, #b4524f 13%, transparent); font-weight: 700; }
+
+/* smart suggestions (AI) */
+.ai-loading { font-size: .9rem; color: var(--muted); padding: 4px 2px; }
+.ai-card { background: var(--accent-soft); border-radius: 14px; padding: 14px; }
+.ai-text { font-size: .95rem; line-height: 1.6; color: var(--accent-ink); }
+.ai-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; background: var(--surface); color: var(--accent-ink); border-radius: 999px; padding: 5px 11px; font-size: .72rem; font-weight: 700; }
+
 </style>
 </head>
 <body>
@@ -529,68 +542,19 @@ const ICONS = [
   { kw: ['water', 'hydrat', 'drink'], emoji: '💧', tip: 'hydration' },
   { kw: ['coffee'], emoji: '☕', tip: 'coffee' },
   { kw: ['tea'], emoji: '🍵', tip: 'coffee' },
-  { kw: ['run', 'jog'], emoji: '🏃', tip: 'movement' },
+  { kw: ['run', 'jog', 'sprint', 'marathon', 'parkrun'], emoji: '🏃', tip: 'movement' },
   { kw: ['walk', 'steps', 'stroll'], emoji: '🚶', tip: 'movement' },
   { kw: ['yoga'], emoji: '🧘', tip: 'movement' },
-  { kw: ['stretch', 'mobility'], emoji: '🤸', tip: 'movement' },
-  { kw: ['gym', 'workout', 'lift', 'weight', 'exercise', 'train', 'pushup', 'plank'], emoji: '🏋️', tip: 'movement' },
+  { kw: ['stretch', 'mobility', 'physio', 'rehab'], emoji: '🤸', tip: 'movement' },
+  { kw: ['pilates', 'calisthenic', 'callisthenic', 'core workout', 'bodyweight', 'gymnastics'], emoji: '🤸', tip: 'movement' },
+  { kw: ['gym', 'workout', 'lift', 'weight', 'exercise', 'train', 'pushup', 'press-up', 'plank', 'hiit', 'crossfit', 'bootcamp', 'strength', 'squat', 'lunge', 'situp', 'sit-up', 'burpee', 'kettlebell', 'dumbbell', 'deadlift', 'treadmill', 'elliptical', 'spin class'], emoji: '🏋️', tip: 'movement' },
   { kw: ['swim'], emoji: '🏊', tip: 'movement' },
   { kw: ['bike', 'cycl'], emoji: '🚴', tip: 'movement' },
-  { kw: ['meditat', 'breath', 'mindful'], emoji: '🧘', tip: 'mind' },
-  { kw: ['sleep', 'nap', 'bedtime', 'lights out'], emoji: '😴', tip: 'sleep' },
-  { kw: ['read', 'book', 'chapter'], emoji: '📖', tip: 'reading' },
-  { kw: ['study', 'revis', 'homework', 'learn', 'course', 'lecture'], emoji: '📚', tip: 'study' },
-  { kw: ['journal', 'diary', 'gratitude'], emoji: '📓', tip: 'journal' },
-  { kw: ['writ'], emoji: '✍️', tip: 'journal' },
-  { kw: ['floss', 'brush', 'teeth', 'dental'], emoji: '🦷', tip: 'dental' },
-  { kw: ['skincare', 'skin care', 'moisturi', 'serum'], emoji: '🧴', tip: 'selfcare' },
-  { kw: ['shower', 'bath'], emoji: '🚿', tip: 'selfcare' },
-  { kw: ['pill', 'meds', 'medic', 'supplement', 'vitamin'], emoji: '💊', tip: 'meds' },
-  { kw: ['cook', 'meal', 'breakfast', 'lunch', 'dinner', 'bake'], emoji: '🍳', tip: 'nutrition' },
-  { kw: ['fruit', 'veg', 'salad', 'greens'], emoji: '🥗', tip: 'nutrition' },
-  { kw: ['laundry'], emoji: '🧺', tip: 'chores' },
-  { kw: ['dishes', 'dishwash'], emoji: '🍽️', tip: 'chores' },
-  { kw: ['clean', 'tidy', 'vacuum', 'hoover', 'declutter'], emoji: '🧹', tip: 'chores' },
-  { kw: ['nature', 'outdoor', 'outside', 'fresh air', 'park', 'hike'], emoji: '🌳', tip: 'nature' },
-  { kw: ['dog'], emoji: '🐕', tip: 'pet' },
-  { kw: ['cat'], emoji: '🐈', tip: 'pet' },
-  { kw: ['pet', 'litter'], emoji: '🐾', tip: 'pet' },
-  { kw: ['email', 'inbox'], emoji: '✉️', tip: 'work' },
-  { kw: ['meeting', 'standup'], emoji: '📅', tip: 'work' },
-  { kw: ['code', 'coding', 'program', 'debug'], emoji: '💻', tip: 'work' },
-  { kw: ['calisthenic', 'callisthenic'], emoji: '🏋️', tip: 'movement' },
-  { kw: ['call', 'phone', 'ring'], emoji: '📞', tip: 'social' },
-  { kw: ['text', 'message'], emoji: '💬', tip: 'social' },
-  { kw: ['famil', 'mum', 'mom', 'dad', 'parent', 'partner', 'friend', 'sister', 'brother', 'grandma', 'grandpa'], emoji: '💛', tip: 'social' },
-  { kw: ['pay', 'bill', 'rent', 'budget', 'saving', 'money', 'invoice', 'finance'], emoji: '💰', tip: 'finance' },
-  { kw: ['piano', 'guitar', 'music', 'practi', 'sing', 'violin', 'drums'], emoji: '🎵', tip: 'practice' },
-  { kw: ['languag', 'spanish', 'french', 'german', 'italian', 'duolingo'], emoji: '🗣️', tip: 'language' },
-  { kw: ['pray', 'scripture', 'church', 'bible', 'worship'], emoji: '🙏', tip: 'mind' },
-  { kw: ['clothes', 'shop', 'shopping', 'outfit', 'wardrobe', 'shoes'], emoji: '🛍️', tip: 'shopping' },
-  { kw: ['grocer', 'supermarket', 'food shop'], emoji: '🛒', tip: 'errands' },
-  { kw: ['errand', 'post office', 'pharmacy', 'returns'], emoji: '🧾', tip: 'errands' },
-  { kw: ['travel', 'holiday', 'vacation', 'flight', 'plane', 'airport', 'pack', 'hotel'], emoji: '✈️', tip: 'travel' },
-  { kw: ['car', 'drive', 'fuel', 'petrol', 'tyre'], emoji: '🚗', tip: 'car' },
-  { kw: ['haircut', 'barber', 'salon', 'nails', 'shave'], emoji: '💇', tip: 'selfcare' },
-  { kw: ['doctor', 'dentist', 'appointment', 'appt', 'clinic'], emoji: '🩺', tip: 'health' },
-  { kw: ['therapy', 'therapist', 'counsel'], emoji: '🧠', tip: 'mind' },
-  { kw: ['birthday', 'gift', 'anniversary'], emoji: '🎁', tip: 'social' },
-  { kw: ['volunteer', 'charity', 'donate'], emoji: '🤝', tip: 'social' },
-  { kw: ['bin', 'bins', 'rubbish', 'trash', 'recycle', 'recycling'], emoji: '🗑️', tip: 'chores' },
-  { kw: ['make bed', 'iron', 'ironing', 'wash', 'mop'], emoji: '🧼', tip: 'chores' },
-  { kw: ['mow', 'lawn', 'weed', 'rake'], emoji: '🌿', tip: 'nature' },
-  { kw: ['fix', 'repair', 'diy', 'assemble'], emoji: '🔧', tip: 'work' },
-  { kw: ['draw', 'paint', 'sketch', 'art', 'craft', 'knit', 'crochet', 'sew'], emoji: '🎨', tip: 'practice' },
-  { kw: ['photo', 'camera', 'photograph'], emoji: '📷', tip: 'practice' },
-  { kw: ['game', 'gaming', 'xbox', 'playstation'], emoji: '🎮', tip: 'selfcare' },
-  { kw: ['movie', 'netflix', 'cinema'], emoji: '🎬', tip: 'selfcare' },
-  { kw: ['plan', 'organi', 'schedule', 'todo', 'to-do'], emoji: '🗂️', tip: 'work' },
-  { kw: ['sunscreen', 'spf'], emoji: '🧴', tip: 'selfcare' },
-  { kw: ['recipe', 'snack', 'smoothie'], emoji: '🍎', tip: 'nutrition' },
-  { kw: ['pilates', 'calisthenic', 'callisthenic', 'hiit', 'crossfit', 'cardio', 'burpee', 'squat', 'lunge', 'situp', 'sit-up', 'press-up', 'treadmill', 'elliptical', 'rowing', 'sprint', 'marathon', 'parkrun', 'kettlebell', 'dumbbell', 'deadlift', 'gymnastics', 'sport', 'spin class'], emoji: '🏋️', tip: 'movement' },
-  { kw: ['dance', 'dancing', 'zumba', 'ballet', 'barre'], emoji: '💃', tip: 'movement' },
-  { kw: ['boxing', 'kickbox', 'sparring', 'martial', 'karate', 'judo', 'taekwondo', 'jiu', 'mma'], emoji: '🥋', tip: 'movement' },
   { kw: ['climb', 'bouldering'], emoji: '🧗', tip: 'movement' },
+  { kw: ['dance', 'dancing', 'zumba', 'ballet', 'barre'], emoji: '💃', tip: 'movement' },
+  { kw: ['boxing', 'kickbox', 'sparring', 'martial', 'karate', 'judo', 'taekwondo', 'jiu', 'mma'], emoji: '🥊', tip: 'movement' },
+  { kw: ['row', 'rowing', 'kayak', 'canoe', 'paddleboard'], emoji: '🚣', tip: 'movement' },
+  { kw: ['surf'], emoji: '🏄', tip: 'movement' },
   { kw: ['football', 'soccer'], emoji: '⚽', tip: 'movement' },
   { kw: ['basketball', 'netball'], emoji: '🏀', tip: 'movement' },
   { kw: ['tennis', 'padel', 'badminton', 'squash'], emoji: '🎾', tip: 'movement' },
@@ -600,23 +564,67 @@ const ICONS = [
   { kw: ['rugby'], emoji: '🏉', tip: 'movement' },
   { kw: ['skiing', 'snowboard'], emoji: '🎿', tip: 'movement' },
   { kw: ['skate', 'skateboard', 'rollerblade'], emoji: '🛹', tip: 'movement' },
-  { kw: ['surf', 'paddleboard', 'kayak', 'canoe'], emoji: '🏄', tip: 'movement' },
-  { kw: ['physio', 'rehab', 'stretching'], emoji: '🤸', tip: 'movement' },
-  { kw: ['hobby', 'hobbies', 'pottery', 'ceramics', 'origami', 'calligraphy', 'scrapbook', 'woodwork', 'whittl', 'model kit', 'lego'], emoji: '🎨', tip: 'practice' },
-  { kw: ['blog'], emoji: '✍️', tip: 'journal' },
-  { kw: ['puzzle', 'jigsaw', 'crossword', 'sudoku', 'chess', 'board game', 'wordle'], emoji: '🧩', tip: 'selfcare' },
+  { kw: ['sport'], emoji: '🏅', tip: 'movement' },
+  { kw: ['meditat', 'breath', 'mindful'], emoji: '🧘', tip: 'mind' },
+  { kw: ['pray', 'scripture', 'church', 'bible', 'worship'], emoji: '🙏', tip: 'mind' },
+  { kw: ['therapy', 'therapist', 'counsel'], emoji: '🧠', tip: 'mind' },
+  { kw: ['sleep', 'nap', 'bedtime', 'lights out'], emoji: '😴', tip: 'sleep' },
+  { kw: ['read', 'book', 'chapter'], emoji: '📖', tip: 'reading' },
+  { kw: ['study', 'revis', 'homework', 'learn', 'course', 'lecture'], emoji: '📚', tip: 'study' },
   { kw: ['podcast', 'audiobook'], emoji: '🎧', tip: 'reading' },
   { kw: ['news', 'newspaper'], emoji: '📰', tip: 'reading' },
-  { kw: ['fishing', 'angling'], emoji: '🎣', tip: 'nature' },
-  { kw: ['camping', 'campsite'], emoji: '🏕️', tip: 'nature' },
-  { kw: ['birdwatch', 'birding'], emoji: '🐦', tip: 'nature' },
+  { kw: ['languag', 'spanish', 'french', 'german', 'italian', 'duolingo'], emoji: '🗣️', tip: 'language' },
+  { kw: ['journal', 'diary', 'gratitude'], emoji: '📓', tip: 'journal' },
+  { kw: ['writ', 'blog'], emoji: '✍️', tip: 'journal' },
+  { kw: ['draw', 'paint', 'sketch', 'art', 'craft', 'knit', 'crochet', 'sew'], emoji: '🎨', tip: 'practice' },
+  { kw: ['hobby', 'hobbies', 'pottery', 'ceramics', 'origami', 'calligraphy', 'scrapbook', 'woodwork', 'whittl', 'model kit', 'lego'], emoji: '🎨', tip: 'practice' },
+  { kw: ['photo', 'camera', 'photograph'], emoji: '📷', tip: 'practice' },
+  { kw: ['piano', 'guitar', 'music', 'practi', 'sing', 'violin', 'drums'], emoji: '🎵', tip: 'practice' },
+  { kw: ['puzzle', 'jigsaw', 'crossword', 'sudoku', 'chess', 'board game', 'wordle'], emoji: '🧩', tip: 'selfcare' },
+  { kw: ['game', 'gaming', 'xbox', 'playstation'], emoji: '🎮', tip: 'selfcare' },
+  { kw: ['movie', 'netflix', 'cinema'], emoji: '🎬', tip: 'selfcare' },
+  { kw: ['floss', 'brush', 'teeth', 'dental'], emoji: '🦷', tip: 'dental' },
+  { kw: ['skincare', 'skin care', 'moisturi', 'serum', 'sunscreen', 'spf'], emoji: '🧴', tip: 'selfcare' },
+  { kw: ['shower', 'bath'], emoji: '🚿', tip: 'selfcare' },
+  { kw: ['haircut', 'barber', 'salon', 'nails', 'shave'], emoji: '💇', tip: 'selfcare' },
   { kw: ['makeup', 'make-up'], emoji: '💄', tip: 'selfcare' },
-  { kw: ['spa day', 'sauna', 'hot tub'], emoji: '🧖', tip: 'selfcare' },
-  { kw: ['massage'], emoji: '💆', tip: 'selfcare' },
-  { kw: ['relax', 'unwind', 'me time', 'self-care', 'rest day', 'wind down'], emoji: '🌿', tip: 'selfcare' },
-  { kw: ['investment', 'investing', 'stocks', 'shares', 'trading', 'portfolio', 'crypto', 'pension', 'isa'], emoji: '📈', tip: 'finance' },
+  { kw: ['spa day', 'sauna', 'hot tub', 'massage'], emoji: '🧖', tip: 'selfcare' },
+  { kw: ['relax', 'unwind', 'me time', 'me-time', 'self-care', 'rest day', 'wind down', 'leisure'], emoji: '🌿', tip: 'selfcare' },
+  { kw: ['doctor', 'dentist', 'appointment', 'appt', 'clinic'], emoji: '🩺', tip: 'health' },
+  { kw: ['pill', 'meds', 'medic', 'supplement', 'vitamin'], emoji: '💊', tip: 'meds' },
+  { kw: ['cook', 'meal', 'breakfast', 'lunch', 'dinner', 'bake'], emoji: '🍳', tip: 'nutrition' },
+  { kw: ['fruit', 'veg', 'salad', 'greens', 'recipe', 'snack', 'smoothie'], emoji: '🥗', tip: 'nutrition' },
+  { kw: ['laundry', 'iron', 'ironing'], emoji: '🧺', tip: 'chores' },
+  { kw: ['dishes', 'dishwash'], emoji: '🍽️', tip: 'chores' },
+  { kw: ['clean', 'tidy', 'vacuum', 'hoover', 'declutter', 'wash', 'mop', 'make bed'], emoji: '🧹', tip: 'chores' },
+  { kw: ['bin', 'bins', 'rubbish', 'trash', 'recycle', 'recycling'], emoji: '🗑️', tip: 'chores' },
+  { kw: ['fix', 'repair', 'diy', 'assemble'], emoji: '🔧', tip: 'work' },
+  { kw: ['mow', 'lawn', 'weed', 'rake'], emoji: '🌿', tip: 'nature' },
+  { kw: ['nature', 'outdoor', 'outside', 'fresh air', 'park', 'hike'], emoji: '🌳', tip: 'nature' },
+  { kw: ['camping', 'campsite'], emoji: '🏕️', tip: 'nature' },
+  { kw: ['fishing', 'angling'], emoji: '🎣', tip: 'nature' },
+  { kw: ['birdwatch', 'birding'], emoji: '🐦', tip: 'nature' },
+  { kw: ['dog'], emoji: '🐕', tip: 'pet' },
+  { kw: ['cat'], emoji: '🐈', tip: 'pet' },
+  { kw: ['pet', 'litter'], emoji: '🐾', tip: 'pet' },
+  { kw: ['call', 'phone', 'ring'], emoji: '📞', tip: 'social' },
+  { kw: ['text', 'message'], emoji: '💬', tip: 'social' },
+  { kw: ['famil', 'mum', 'mom', 'dad', 'parent', 'partner', 'friend', 'sister', 'brother', 'grandma', 'grandpa'], emoji: '💛', tip: 'social' },
   { kw: ['kids', 'children', 'baby', 'school run', 'nursery', 'playdate'], emoji: '🧸', tip: 'social' },
   { kw: ['date night', 'anniversary dinner'], emoji: '💞', tip: 'social' },
+  { kw: ['birthday', 'gift', 'anniversary'], emoji: '🎁', tip: 'social' },
+  { kw: ['volunteer', 'charity', 'donate'], emoji: '🤝', tip: 'social' },
+  { kw: ['email', 'inbox'], emoji: '✉️', tip: 'work' },
+  { kw: ['meeting', 'standup'], emoji: '📅', tip: 'work' },
+  { kw: ['code', 'coding', 'program', 'debug'], emoji: '💻', tip: 'work' },
+  { kw: ['clothes', 'shop', 'shopping', 'outfit', 'wardrobe', 'shoes'], emoji: '🛍️', tip: 'shopping' },
+  { kw: ['grocer', 'supermarket', 'food shop'], emoji: '🛒', tip: 'errands' },
+  { kw: ['errand', 'post office', 'pharmacy', 'returns'], emoji: '🧾', tip: 'errands' },
+  { kw: ['travel', 'holiday', 'vacation', 'flight', 'plane', 'airport', 'pack', 'hotel'], emoji: '✈️', tip: 'travel' },
+  { kw: ['car', 'drive', 'fuel', 'petrol', 'tyre'], emoji: '🚗', tip: 'car' },
+  { kw: ['pay', 'bill', 'rent', 'budget', 'saving', 'money', 'invoice', 'finance'], emoji: '💰', tip: 'finance' },
+  { kw: ['investment', 'investing', 'stocks', 'shares', 'trading', 'portfolio', 'crypto', 'pension', 'isa'], emoji: '📈', tip: 'finance' },
+  { kw: ['plan', 'organi', 'schedule', 'todo', 'to-do'], emoji: '🗂️', tip: 'work' },
   { kw: ['work', 'report', 'project', 'admin'], emoji: '💼', tip: 'work' }
 ];
 
@@ -673,7 +681,7 @@ function defaultState() {
   return {
     version: 1,
     tasks: [],
-    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '', syncEnabled: false },
+    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '', syncEnabled: false, aiEnabled: false },
     onboarded: false,
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -693,7 +701,7 @@ function uid() { return 't' + Date.now().toString(36) + Math.random().toString(3
             days:[0..6], target:N, completions:[ISO...], archived:bool, createdAt }
 -------------------------------------------------------- */
 function newTask(o) {
-  return Object.assign({ id: uid(), title: '', type: 'daily', days: [], target: 3, completions: [], archived: false, createdAt: Date.now() }, o);
+  return Object.assign({ id: uid(), title: '', type: 'daily', days: [], target: 3, completions: [], archived: false, startDate: '', dueDate: '', createdAt: Date.now() }, o);
 }
 function compsOn(t, key) { return (t.completions || []).filter(ts => dateKey(new Date(ts)) === key).length; }
 function compsThisWeek(t, ref) { return (t.completions || []).filter(ts => sameWeek(dateKey(new Date(ts)), ref)).length; }
@@ -703,6 +711,7 @@ function doneToday(t) { return compsOn(t, todayKey()) > 0; }
 // Is the task expected to appear in Today's list at all?
 function scheduledToday(t) {
   if (t.archived) return false;
+  if (t.startDate && todayKey() < t.startDate) return false;
   if (t.type === 'daily') return true;
   if (t.type === 'weekdays') return (t.days || []).includes(dowMon(new Date()));
   if (t.type === 'weekly') return true;       // always available to log toward the week
@@ -721,6 +730,7 @@ function isDoneInToday(t) {
 function activeDayKey() { return viewDayKey || todayKey(); }
 function scheduledOnDate(t, d) {
   if (t.archived) return false;
+  if (t.startDate && dateKey(d) < t.startDate) return false;
   if (t.type === 'daily') return true;
   if (t.type === 'weekdays') return (t.days || []).includes(dowMon(d));
   // weekly / finite goals are week-level — only surface them on the live "today" view
@@ -816,6 +826,17 @@ function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.
 
 const CHK = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>';
 
+function niceDate(key) { const d = new Date(key + 'T12:00:00'); const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mo[d.getMonth()] + ' ' + d.getDate(); }
+function dateTagEls(t) {
+  const out = []; const tk = todayKey();
+  if (t.startDate && t.startDate > tk) out.push(el('span', 'tag', 'From ' + niceDate(t.startDate)));
+  if (t.dueDate) {
+    const done = (t.type === 'finite') ? totalComps(t) >= t.target : compsOn(t, tk) > 0;
+    if (!done && tk > t.dueDate) out.push(el('span', 'tag overdue', 'Overdue'));
+    else out.push(el('span', 'tag', 'Due ' + niceDate(t.dueDate)));
+  }
+  return out;
+}
 function typeTag(t) {
   if (t.type === 'daily') return 'Every day';
   if (t.type === 'weekdays') return (t.days || []).map(d => DOW_SHORT[d]).join(' · ') || 'Set days';
@@ -854,6 +875,7 @@ function taskCard(t, day) {
   body.appendChild(el('div', 'card-title', (ico ? '<span class="ttl-ico">' + ico + '</span>' : '') + escapeHtml(t.title)));
   const meta = el('div', 'card-meta');
   meta.appendChild(el('span', 'tag accent', typeTag(t)));
+  dateTagEls(t).forEach(s => meta.appendChild(s));
   body.appendChild(meta);
 
   if (isGoal) {
@@ -930,7 +952,14 @@ function renderToday() {
 /* Read-only Google Calendar events for the active day */
 function renderDayCalendar(v, key) {
   if (!S.settings.gcalConnected || S.settings.gcalShow === false) return;
-  if (gcalEventsByDay[key] === undefined) { gcalFetchDay(key); return; }
+  if (gcalEventsByDay[key] === undefined) {
+    if (gcalToken && Date.now() < gcalTokenExp) { gcalFetchDay(key); return; }
+    v.appendChild(el('div', 'section-title', 'From your calendar'));
+    const lb = el('button', 'btn ghost', 'Load calendar events'); lb.style.marginBottom = '10px';
+    lb.addEventListener('click', () => { gcalFetchDay(key); });
+    v.appendChild(lb);
+    return;
+  }
   const evs = gcalEventsByDay[key];
   if (!evs || !evs.length) return;
   v.appendChild(el('div', 'section-title', 'From your calendar'));
@@ -979,6 +1008,7 @@ function manageRow(t) {
   body.appendChild(el('div', 'card-title', (ico ? '<span class="ttl-ico">' + ico + '</span>' : '') + escapeHtml(t.title)));
   const meta = el('div', 'card-meta');
   meta.appendChild(el('span', 'tag', t.archived ? 'Completed' : typeTag(t)));
+  if (!t.archived) dateTagEls(t).forEach(s => meta.appendChild(s));
   body.appendChild(meta);
   body.addEventListener('click', () => openEditor(t.id));
   const chev = el('div', 'tag', 'Edit');
@@ -1001,10 +1031,11 @@ function weeklyRate() {
   const today = new Date(); const daysElapsed = dowMon(today) + 1; // Mon..today inclusive
   const wd = weekDates();
   S.tasks.forEach(t => {
+    if (t.startDate && t.startDate > dateKey(wd[daysElapsed - 1])) return;
     if (t.type === 'daily') {
-      for (let i = 0; i < daysElapsed; i++) { expected++; if (compsOn(t, dateKey(wd[i])) > 0) done++; }
+      for (let i = 0; i < daysElapsed; i++) { if (t.startDate && dateKey(wd[i]) < t.startDate) continue; expected++; if (compsOn(t, dateKey(wd[i])) > 0) done++; }
     } else if (t.type === 'weekdays') {
-      for (let i = 0; i < daysElapsed; i++) { if ((t.days || []).includes(i)) { expected++; if (compsOn(t, dateKey(wd[i])) > 0) done++; } }
+      for (let i = 0; i < daysElapsed; i++) { if ((t.days || []).includes(i)) { if (t.startDate && dateKey(wd[i]) < t.startDate) continue; expected++; if (compsOn(t, dateKey(wd[i])) > 0) done++; } }
     } else if (t.type === 'weekly') {
       expected += t.target; done += Math.min(t.target, compsThisWeek(t));
     }
@@ -1053,6 +1084,15 @@ function renderStats() {
   ringCard.appendChild(rw);
   ringCard.appendChild(el('div', 'reward-hint', '\ud83c\udf81 Hit a weekly goal or a full 100% week and Tally celebrates with you \u2014 with a nudge to reward yourself.'));
   v.appendChild(ringCard);
+  if (S.settings.aiEnabled) {
+    const ac = el('div', 'stat-card');
+    const ab = el('button', 'btn block', '✨ Get a suggestion'); ab.id = 'aiBtn';
+    ab.addEventListener('click', aiSuggest);
+    ac.appendChild(ab);
+    const aout = el('div', null); aout.id = 'aiOut'; aout.style.marginTop = '12px';
+    ac.appendChild(aout);
+    v.appendChild(ac);
+  }
 
   // big numbers
   const counts = perDayCounts();
@@ -1168,6 +1208,15 @@ function renderSettings() {
   v.appendChild(cg);
   v.appendChild(el('div', 'about', 'Read-only \u2014 Tally shows your Google Calendar but never changes it. Needs Tally opened from its web address (not a local file).'));
 
+  v.appendChild(el('div', 'section-title', 'Smart suggestions'));
+  const ag = el('div', 'set-group');
+  const arow = el('div', 'set-row');
+  arow.innerHTML = '<div class="lblwrap"><div class="lbl">Smart suggestions (AI)</div><div class="sub">' + (S.settings.aiEnabled ? 'On · tap “Get a suggestion” on Stats' : 'Off · gentle AI tips from your week') + '</div></div>';
+  const asw = el('label', 'switch'); asw.innerHTML = '<input type="checkbox" id="aiToggle"' + (S.settings.aiEnabled ? ' checked' : '') + '><span class="slider"></span>';
+  arow.appendChild(asw); ag.appendChild(arow);
+  v.appendChild(ag);
+  v.appendChild(el('div', 'about', 'AI is off until you turn it on. It only ever sees this week’s task names and progress — never your notes or history — and every suggestion is clearly labelled AI-generated.'));
+
   v.appendChild(el('div', 'section-title', 'You'));
   const yg = el('div', 'set-group');
   const ny = el('div', 'set-row');
@@ -1199,6 +1248,7 @@ function renderSettings() {
   // wire
   $('#notifyToggle').addEventListener('change', onNotifyToggle);
   $('#reminderTime').addEventListener('change', (e) => { S.settings.reminderTime = e.target.value; save(); scheduleReminders(); });
+  if ($('#aiToggle')) $('#aiToggle').addEventListener('change', (e) => { if (e.target.checked) openAIConsent(); else { S.settings.aiEnabled = false; save(); renderCurrent(); } });
   if ($('#gcalShowToggle')) $('#gcalShowToggle').addEventListener('change', (e) => { S.settings.gcalShow = e.target.checked; save(); renderCurrent(); });
   $('#nameInput').addEventListener('input', (e) => { S.settings.name = e.target.value.trim(); save(); renderHeader(); });
 }
@@ -1258,6 +1308,15 @@ function openEditor(id) {
   const fParams = el('div', 'field'); fParams.id = 'ef-params';
   body.appendChild(fParams);
 
+  const fDates = el('div', 'field');
+  fDates.innerHTML = '<label>Dates (optional)</label>'
+    + '<div class="date-row">'
+    + '<div class="date-col"><span class="date-lbl">Show from</span><input type="date" id="ef-start" /></div>'
+    + '<div class="date-col"><span class="date-lbl">Due by</span><input type="date" id="ef-due" /></div>'
+    + '</div>'
+    + '<div class="about" style="padding:4px 0 0">Hidden until the start date \u2014 pair with a count-down for things like \u201cbuy gifts from Dec 10\u201d.</div>';
+  body.appendChild(fDates);
+
   const acts = el('div', 'sheet-actions');
   const cancel = el('button', 'btn ghost', 'Cancel'); cancel.addEventListener('click', closeSheet);
   const saveBtn = el('button', 'btn', id ? 'Save' : 'Add task'); saveBtn.id = 'ef-save'; saveBtn.addEventListener('click', saveEditor);
@@ -1271,6 +1330,8 @@ function openEditor(id) {
   }
 
   $('#ef-title').value = draft.title || '';
+  if ($('#ef-start')) $('#ef-start').value = draft.startDate || '';
+  if ($('#ef-due')) $('#ef-due').value = draft.dueDate || '';
   renderEditorParams();
   $('#sheet').hidden = false;
   setTimeout(() => { $('#ef-title').focus(); }, 60);
@@ -1302,13 +1363,15 @@ function saveEditor() {
   const title = ($('#ef-title').value || '').trim();
   if (!title) { $('#ef-title').focus(); return; }
   draft.title = title;
+  const sd = $('#ef-start') ? $('#ef-start').value : '';
+  const dd = $('#ef-due') ? $('#ef-due').value : '';
   if (draft.type === 'weekdays' && (!draft.days || !draft.days.length)) draft.days = [dowMon(new Date())];
   if (editingId) {
     const t = S.tasks.find(x => x.id === editingId);
-    Object.assign(t, { title: draft.title, type: draft.type, days: draft.days, target: draft.target });
+    Object.assign(t, { title: draft.title, type: draft.type, days: draft.days, target: draft.target, startDate: sd, dueDate: dd });
     if (t.type === 'finite' && totalComps(t) < t.target) t.archived = false;
   } else {
-    addTask({ title: draft.title, type: draft.type, days: draft.days, target: draft.target });
+    addTask({ title: draft.title, type: draft.type, days: draft.days, target: draft.target, startDate: sd, dueDate: dd });
   }
   save(); closeSheet(); renderAll();
 }
@@ -1507,7 +1570,8 @@ function gcalDisconnect() {
   toast('Calendar disconnected.');
 }
 async function gcalInitSilent() {
-  try { await gcalInitClient(); const tok = await gcalEnsureToken(); if (tok) gcalFetchDay(activeDayKey()); } catch (e) {}
+  // Only prepare the client. Never request a token on launch — that pops the Google chooser in an installed PWA.
+  try { await gcalInitClient(); } catch (e) {}
 }
 function gcalEnsureToken() {
   return new Promise((resolve) => {
@@ -1678,6 +1742,50 @@ function fbPushNow() {
 function fbSchedulePush() {
   if (!fbUser || adoptingRemote) return;
   clearTimeout(fbPushTimer); fbPushTimer = setTimeout(fbPushNow, 800);
+}
+
+/* ---------------- Smart suggestions (AI, opt-in) ---------------- */
+let AI_WORKER_URL = 'https://tally-ai.gerasimosdap.workers.dev';  // deployed Cloudflare Worker
+function aiSetWorker(u) { AI_WORKER_URL = u; }
+function aiPayload() {
+  const r = weeklyRate();
+  const tasks = S.tasks.filter(t => !t.archived).map(t => {
+    let progress;
+    if (t.type === 'weekly') progress = compsThisWeek(t) + '/' + t.target + ' this week';
+    else if (t.type === 'finite') progress = totalComps(t) + '/' + t.target + ' total';
+    else progress = daysDoneThisWeek(t) + ' days this week';
+    return { title: t.title, type: t.type, progress: progress };
+  });
+  return { weekPct: r.pct, streak: currentStreak(), tasks: tasks };
+}
+function openAIConsent() {
+  const o = $('#celebrate');
+  o.innerHTML = '<div class="celebrate-card" role="dialog" aria-modal="true">'
+    + '<div class="celebrate-emoji">✨</div>'
+    + '<h2 class="celebrate-title">Smart suggestions</h2>'
+    + '<p class="celebrate-body">Get one gentle, specific tip drawn from your week. Tap “Get a suggestion” on Stats whenever you like.</p>'
+    + '<div class="reward-callout"><span class="reward-ico">🔒</span><span>When on, Tally shares only this week’s task names and progress — never your notes or history.</span></div>'
+    + '<div class="sheet-actions"><button class="btn ghost" id="aiNo">Not now</button><button class="btn" id="aiYes">Turn on</button></div>'
+    + '</div>';
+  o.hidden = false;
+  $('#aiYes').addEventListener('click', () => { S.settings.aiEnabled = true; save(); closeCelebrate(); renderSettings(); });
+  $('#aiNo').addEventListener('click', () => { closeCelebrate(); renderSettings(); });
+}
+async function aiSuggest() {
+  const out = $('#aiOut'); if (!out) return;
+  if (!AI_WORKER_URL) { out.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
+  out.innerHTML = '<div class="ai-loading">Thinking…</div>';
+  try {
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(aiPayload()) });
+    if (!res.ok) throw new Error('http');
+    const data = await res.json();
+    const text = (data && data.suggestion) ? String(data.suggestion) : '';
+    if (!text) throw new Error('empty');
+    out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a suggestion, not gospel</div></div>';
+    out.querySelector('.ai-text').textContent = text;
+  } catch (e) {
+    out.innerHTML = '<div class="about" style="padding:0">Couldn’t get a suggestion right now — try again in a moment.</div>';
+  }
 }
 
 
