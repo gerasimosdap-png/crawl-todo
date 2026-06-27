@@ -1,5 +1,5 @@
 /* Tally service worker — offline cache + reliable updates + notifications */
-const VERSION = 'tally-v2';
+const VERSION = 'tally-v3';
 const CORE = [
   './', './index.html', './styles.css', './app.js',
   './manifest.webmanifest',
@@ -31,7 +31,7 @@ self.addEventListener('fetch', (e) => {
 
   if (isShell(url)) {
     e.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-store' })
         .then((res) => {
           const copy = res.clone();
           caches.open(VERSION).then((c) => { try { c.put(request, copy); } catch (_) {} });

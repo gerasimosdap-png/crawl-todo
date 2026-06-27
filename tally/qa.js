@@ -254,6 +254,13 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   $('#aiBtn').click(); await wait(40);
   ($('#aiOut .ai-card') && /Lovely momentum/.test($('#aiOut').textContent)) ? ok('AI suggestion renders in a card') : bad('ai render', $('#aiOut') && $('#aiOut').textContent);
   /AI-generated/.test($('#aiOut').textContent) ? ok('every suggestion shows the AI disclosure') : bad('ai disclosure', 'missing');
+  window.fetch = async () => ({ ok: true, json: async () => ({ clarified: '10-min walk after lunch, Mon/Wed/Fri' }) });
+  $('#fab').click(); await wait(30);
+  $('#ef-title').value = 'exercise';
+  $('#ef-clarify') ? ok('Sharpen-with-AI button shows in editor when AI on') : bad('clarify button', 'missing');
+  if ($('#ef-clarify')) { $('#ef-clarify').click(); await wait(40); }
+  (/walk after lunch/.test($('#ef-title').value)) ? ok('clarifier rewrites the task title') : bad('clarify result', $('#ef-title').value);
+  if (window.closeSheet) window.closeSheet();
 
   // ---- Google Calendar (read-only) ----
   const SS = JSON.parse(window.localStorage.getItem('tally.v1'));

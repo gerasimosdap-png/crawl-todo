@@ -1285,6 +1285,11 @@ function openEditor(id) {
 
   const fTitle = el('div', 'field');
   fTitle.innerHTML = '<label>What is it?</label><input type="text" id="ef-title" placeholder="e.g. Stretch, Read, Drink water" />';
+  if (S.settings.aiEnabled) {
+    const cl = el('button', 'btn ghost', '✨ Sharpen with AI'); cl.id = 'ef-clarify'; cl.type = 'button'; cl.style.marginTop = '8px';
+    cl.addEventListener('click', aiClarify);
+    fTitle.appendChild(cl);
+  }
   body.appendChild(fTitle);
 
   const fType = el('div', 'field');
@@ -1786,6 +1791,23 @@ async function aiSuggest() {
   } catch (e) {
     out.innerHTML = '<div class="about" style="padding:0">Couldn’t get a suggestion right now — try again in a moment.</div>';
   }
+}
+
+async function aiClarify() {
+  const titleEl = $('#ef-title'); if (!titleEl) return;
+  const t = (titleEl.value || '').trim();
+  if (!t) { titleEl.focus(); return; }
+  if (!AI_WORKER_URL) { toast('Smart suggestions aren’t set up yet.'); return; }
+  const btn = $('#ef-clarify'); const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sharpening…'; }
+  try {
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'clarify', title: t }) });
+    const data = await res.json();
+    const c = data && (data.clarified || data.suggestion);
+    if (res.ok && c) { titleEl.value = c; if (draft) draft.title = c; toast('✨ Sharpened — tweak it however you like'); }
+    else toast('Couldn’t sharpen right now — try again.');
+  } catch (e) { toast('Couldn’t sharpen right now — try again.'); }
+  if (btn) { btn.disabled = false; btn.textContent = label; }
 }
 
 

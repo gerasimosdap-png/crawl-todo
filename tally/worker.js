@@ -28,15 +28,22 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400, cors); }
 
-    const tasks = Array.isArray(body.tasks) ? body.tasks.slice(0, 40) : [];
-    const weekPct = Number.isFinite(body.weekPct) ? body.weekPct : 0;
-    const streak = Number.isFinite(body.streak) ? body.streak : 0;
-
-    const summary = tasks
-      .map(t => `- ${String(t.title || '').slice(0, 80)} (${String(t.type || '')}): ${String(t.progress || '').slice(0, 40)}`)
-      .join('\n');
-
-    const prompt =
+    const mode = body.mode === 'clarify' ? 'clarify' : 'suggest';
+    let prompt;
+    if (mode === 'clarify') {
+      const title = String(body.title || '').slice(0, 120);
+      if (!title) return json({ error: 'no title' }, 400, cors);
+      prompt =
+`Rewrite this personal task into a clearer, more doable version with a simple implementation intention (what, and when or where), under 12 words. Keep the person's intent and tone. Reply with ONLY the rewritten task \u2014 no quotes, no preamble, no options.
+Task: ${title}`;
+    } else {
+      const tasks = Array.isArray(body.tasks) ? body.tasks.slice(0, 40) : [];
+      const weekPct = Number.isFinite(body.weekPct) ? body.weekPct : 0;
+      const streak = Number.isFinite(body.streak) ? body.streak : 0;
+      const summary = tasks
+        .map(t => `- ${String(t.title || '').slice(0, 80)} (${String(t.type || '')}): ${String(t.progress || '').slice(0, 40)}`)
+        .join('\n');
+      prompt =
 `You are a warm, encouraging habit coach inside a calm personal task-tracker called Tally, informed by James Clear's Atomic Habits.
 
 The user's week so far (Monday to Sunday):
@@ -44,7 +51,8 @@ Overall completion: ${weekPct}%. Current day-streak: ${streak}.
 Tasks:
 ${summary || '(no active tasks yet)'}
 
-Give ONE short suggestion (under 55 words) to help them this week. Be specific to their data, celebrate what is going well, and offer one tiny, easy next step (habit stacking, a two-minute version, or a clearer cue). Warm, non-judgmental, plain language. No medical, diet, weight, or clinical advice. No preamble or sign-off — just the suggestion.`;
+Give ONE short suggestion (under 55 words) to help them this week. Be specific to their data, celebrate what is going well, and offer one tiny, easy next step (habit stacking, a two-minute version, or a clearer cue). Warm, non-judgmental, plain language. No medical, diet, weight, or clinical advice. No preamble or sign-off \u2014 just the suggestion.`;
+    }
 
     const key = env.GEMINI_API_KEY;
     if (!key) return json({ error: 'no key configured' }, 500, cors);
@@ -70,7 +78,7 @@ Give ONE short suggestion (under 55 words) to help them this week. Be specific t
     try { text = data.candidates[0].content.parts[0].text.trim(); } catch (e) {}
     if (!text) return json({ error: 'empty' }, 502, cors);
 
-    return json({ suggestion: text }, 200, cors);
+    return json(mode === 'clarify' ? { clarified: text } : { suggestion: text }, 200, cors);
   },
 };
 
