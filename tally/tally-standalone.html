@@ -446,6 +446,22 @@ body {
 .ai-text { font-size: .95rem; line-height: 1.6; color: var(--accent-ink); }
 .ai-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; background: var(--surface); color: var(--accent-ink); border-radius: 999px; padding: 5px 11px; font-size: .72rem; font-weight: 700; }
 
+/* proactive check-in + AI editor controls + feedback */
+.proactive { background: var(--accent-soft); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.pro-row { display: flex; gap: 10px; align-items: flex-start; }
+.pro-ico { font-size: 1.3rem; line-height: 1.1; }
+.pro-text { font-size: .92rem; line-height: 1.5; color: var(--accent-ink); }
+.pro-acts { display: flex; gap: 8px; margin-top: 12px; }
+.pro-acts .btn { flex: 1; }
+.ai-row { display: flex; gap: 8px; margin-top: 8px; }
+.ai-row .btn { flex: 1; }
+.fb-text { width: 100%; min-height: 96px; background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 12px; font-size: 1rem; font-family: inherit; resize: vertical; margin-bottom: 14px; }
+
+/* multi-question help chips + wrapped AI text */
+.help-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.help-chips .chip { font-size: .85rem; }
+.ai-text { white-space: pre-wrap; }
+
 </style>
 </head>
 <body>
@@ -681,7 +697,7 @@ function defaultState() {
   return {
     version: 1,
     tasks: [],
-    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '', syncEnabled: false, aiEnabled: false },
+    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '', syncEnabled: false, aiEnabled: false, proactiveDismiss: '' },
     onboarded: false,
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -925,6 +941,7 @@ function renderToday() {
     banner.appendChild(back);
     v.appendChild(banner);
   }
+  if (day.isToday) renderProactive(v);
 
   const sched = S.tasks.filter(t => scheduledOnDate(t, d));
   if (sched.length === 0) {
@@ -1217,6 +1234,13 @@ function renderSettings() {
   v.appendChild(ag);
   v.appendChild(el('div', 'about', 'AI is off until you turn it on. It only ever sees this week’s task names and progress — never your notes or history — and every suggestion is clearly labelled AI-generated.'));
 
+  v.appendChild(el('div', 'section-title', 'Feedback'));
+  const fg = el('div', 'set-group');
+  const fr = el('div', 'set-row');
+  fr.innerHTML = '<div class="lblwrap"><div class="lbl">Send feedback</div><div class="sub">Tell us what\u2019s working, or what isn\u2019t</div></div>';
+  const fbBtn = el('button', 'btn ghost', 'Write'); fbBtn.id = 'feedbackBtn'; fbBtn.addEventListener('click', openFeedback);
+  fr.appendChild(fbBtn); fg.appendChild(fr); v.appendChild(fg);
+
   v.appendChild(el('div', 'section-title', 'You'));
   const yg = el('div', 'set-group');
   const ny = el('div', 'set-row');
@@ -1286,9 +1310,11 @@ function openEditor(id) {
   const fTitle = el('div', 'field');
   fTitle.innerHTML = '<label>What is it?</label><input type="text" id="ef-title" placeholder="e.g. Stretch, Read, Drink water" />';
   if (S.settings.aiEnabled) {
-    const cl = el('button', 'btn ghost', '✨ Sharpen with AI'); cl.id = 'ef-clarify'; cl.type = 'button'; cl.style.marginTop = '8px';
-    cl.addEventListener('click', aiClarify);
-    fTitle.appendChild(cl);
+    const aiRow = el('div', 'ai-row');
+    const cl = el('button', 'btn ghost', '✨ Sharpen'); cl.id = 'ef-clarify'; cl.type = 'button'; cl.addEventListener('click', aiClarify);
+    const as = el('button', 'btn ghost', '💡 Get an idea'); as.id = 'ef-assist'; as.type = 'button'; as.addEventListener('click', aiAssist);
+    aiRow.appendChild(cl); aiRow.appendChild(as); fTitle.appendChild(aiRow);
+    const aout = el('div'); aout.id = 'ef-aiout'; aout.style.marginTop = '8px'; fTitle.appendChild(aout);
   }
   body.appendChild(fTitle);
 
@@ -1787,7 +1813,7 @@ async function aiSuggest() {
     const text = (data && data.suggestion) ? String(data.suggestion) : '';
     if (!text) throw new Error('empty');
     out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a suggestion, not gospel</div></div>';
-    out.querySelector('.ai-text').textContent = text;
+    out.querySelector('.ai-text').textContent = aiClean(text);
   } catch (e) {
     out.innerHTML = '<div class="about" style="padding:0">Couldn’t get a suggestion right now — try again in a moment.</div>';
   }
@@ -1808,6 +1834,116 @@ async function aiClarify() {
     else toast('Couldn’t sharpen right now — try again.');
   } catch (e) { toast('Couldn’t sharpen right now — try again.'); }
   if (btn) { btn.disabled = false; btn.textContent = label; }
+}
+
+/* ---------------- Feedback ---------------- */
+function openFeedback() {
+  const o = $('#celebrate');
+  o.innerHTML = '<div class="celebrate-card" role="dialog" aria-modal="true">'
+    + '<div class="celebrate-emoji">\ud83d\udcac</div>'
+    + '<h2 class="celebrate-title">Send feedback</h2>'
+    + '<p class="celebrate-body">What do you love, what\u2019s confusing, what\u2019s missing? It opens your email, pre-filled.</p>'
+    + '<textarea id="fbText" class="fb-text" placeholder="Your thoughts\u2026"></textarea>'
+    + '<div class="sheet-actions"><button class="btn ghost" id="fbCancel">Cancel</button><button class="btn" id="fbSend">Send</button></div>'
+    + '</div>';
+  o.hidden = false;
+  setTimeout(() => { const t = $('#fbText'); if (t) t.focus(); }, 50);
+  $('#fbCancel').addEventListener('click', closeCelebrate);
+  $('#fbSend').addEventListener('click', () => {
+    const txt = ($('#fbText').value || '').trim();
+    const body = encodeURIComponent(txt + '\n\n— sent from Tally');
+    const subject = encodeURIComponent('Tally feedback');
+    closeCelebrate();
+    window.location.href = 'mailto:gerasimosdap@gmail.com?subject=' + subject + '&body=' + body;
+  });
+}
+
+/* ---------------- Proactive check-in (AI, opt-in) ---------------- */
+function laggingGoal() {
+  if (!S.settings.aiEnabled) return null;
+  const dim = dowMon(new Date());          // 0 = Mon ... 6 = Sun
+  if (dim < 2) return null;                 // only nudge from Wednesday on
+  const wk = weekKey();
+  for (const t of S.tasks) {
+    if (t.archived || t.type !== 'weekly') continue;
+    const done = compsThisWeek(t);
+    if (done >= t.target) continue;
+    const daysLeft = 7 - dim;               // includes today
+    const need = t.target - done;
+    const behind = need > daysLeft || (done === 0) || (done / t.target) < ((dim + 1) / 7) * 0.5;
+    if (!behind) continue;
+    if (S.settings.proactiveDismiss === wk + '|' + t.id) continue;
+    return t;
+  }
+  return null;
+}
+function renderProactive(v) {
+  const t = laggingGoal();
+  if (!t) return;
+  const card = el('div', 'proactive');
+  card.innerHTML = '<div class="pro-row"><span class="pro-ico">\ud83e\udd1d</span><div class="pro-text">A little behind on <b>' + escapeHtml(t.title) + '</b> this week \u2014 want a hand?</div></div>';
+  const acts = el('div', 'pro-acts');
+  const yes = el('button', 'btn', 'Yes, help'); yes.addEventListener('click', () => aiHelp(t, card));
+  const no = el('button', 'btn ghost', 'Not now'); no.addEventListener('click', () => { S.settings.proactiveDismiss = weekKey() + '|' + t.id; save(); renderToday(); });
+  acts.appendChild(yes); acts.appendChild(no);
+  card.appendChild(acts);
+  v.appendChild(card);
+}
+function aiClean(s) {
+  return String(s || '').replace(/\*\*/g, '').replace(/^\s*[\*\-]\s+/gm, '• ').replace(/`/g, '').trim();
+}
+function aiHelp(t, card) { askHelpBlocker(t, card); }
+function askHelpBlocker(t, card) {
+  card.innerHTML = '<div class="pro-text" style="margin-bottom:10px">What’s getting in the way of <b>' + escapeHtml(t.title) + '</b>?</div>';
+  const chips = el('div', 'help-chips');
+  ['Time', 'Energy', 'Not sure how', 'Motivation'].forEach(b => {
+    const ch = el('button', 'chip', b); ch.type = 'button';
+    ch.addEventListener('click', () => askHelpTime(t, card, b));
+    chips.appendChild(ch);
+  });
+  card.appendChild(chips);
+}
+function askHelpTime(t, card, blocker) {
+  card.innerHTML = '<div class="pro-text" style="margin-bottom:10px">How much time do you realistically have today?</div>';
+  const chips = el('div', 'help-chips');
+  ['2 minutes', '10 minutes', '20+ minutes'].forEach(tm => {
+    const ch = el('button', 'chip', tm); ch.type = 'button';
+    ch.addEventListener('click', () => fetchHelp(t, card, blocker, tm));
+    chips.appendChild(ch);
+  });
+  card.appendChild(chips);
+}
+async function fetchHelp(t, card, blocker, time) {
+  if (!AI_WORKER_URL) { card.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
+  card.innerHTML = '<div class="ai-loading">Thinking…</div>';
+  const progress = compsThisWeek(t) + '/' + t.target + ' this week. Their main blocker: ' + blocker + '. Time available today: ' + time + '.';
+  try {
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'help', title: t.title, progress }) });
+    const data = await res.json();
+    const text = data && (data.help || data.suggestion);
+    if (res.ok && text) {
+      card.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a suggestion, not gospel</div></div>';
+      card.querySelector('.ai-text').textContent = aiClean(text);
+      S.settings.proactiveDismiss = weekKey() + '|' + t.id; save();
+    } else { card.innerHTML = '<div class="about" style="padding:0">Couldn’t fetch a tip right now — try again later.</div>'; }
+  } catch (e) { card.innerHTML = '<div class="about" style="padding:0">Couldn’t fetch a tip right now — try again later.</div>'; }
+}
+
+async function aiAssist() {
+  const titleEl = $('#ef-title'); const out = $('#ef-aiout'); if (!titleEl || !out) return;
+  const t = (titleEl.value || '').trim();
+  if (!t) { titleEl.focus(); return; }
+  if (!AI_WORKER_URL) { toast('Smart suggestions aren\u2019t set up yet.'); return; }
+  out.innerHTML = '<div class="ai-loading">Thinking\u2026</div>';
+  try {
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'assist', title: t }) });
+    const data = await res.json();
+    const text = data && (data.assist || data.suggestion);
+    if (res.ok && text) {
+      out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">\u2728 AI-generated \u2014 a suggestion, not gospel</div></div>';
+      out.querySelector('.ai-text').textContent = aiClean(text);
+    } else { out.innerHTML = '<div class="about" style="padding:0">Couldn\u2019t get an idea right now \u2014 try again.</div>'; }
+  } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn\u2019t get an idea right now \u2014 try again.</div>'; }
 }
 
 

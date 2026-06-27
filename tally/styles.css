@@ -429,3 +429,19 @@ body {
 .ai-card { background: var(--accent-soft); border-radius: 14px; padding: 14px; }
 .ai-text { font-size: .95rem; line-height: 1.6; color: var(--accent-ink); }
 .ai-badge { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; background: var(--surface); color: var(--accent-ink); border-radius: 999px; padding: 5px 11px; font-size: .72rem; font-weight: 700; }
+
+/* proactive check-in + AI editor controls + feedback */
+.proactive { background: var(--accent-soft); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.pro-row { display: flex; gap: 10px; align-items: flex-start; }
+.pro-ico { font-size: 1.3rem; line-height: 1.1; }
+.pro-text { font-size: .92rem; line-height: 1.5; color: var(--accent-ink); }
+.pro-acts { display: flex; gap: 8px; margin-top: 12px; }
+.pro-acts .btn { flex: 1; }
+.ai-row { display: flex; gap: 8px; margin-top: 8px; }
+.ai-row .btn { flex: 1; }
+.fb-text { width: 100%; min-height: 96px; background: var(--surface); border: 1px solid var(--line); color: var(--text); border-radius: 12px; padding: 12px; font-size: 1rem; font-family: inherit; resize: vertical; margin-bottom: 14px; }
+
+/* multi-question help chips + wrapped AI text */
+.help-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.help-chips .chip { font-size: .85rem; }
+.ai-text { white-space: pre-wrap; }

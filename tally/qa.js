@@ -262,6 +262,30 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   (/walk after lunch/.test($('#ef-title').value)) ? ok('clarifier rewrites the task title') : bad('clarify result', $('#ef-title').value);
   if (window.closeSheet) window.closeSheet();
 
+  // assist: Get-an-idea returns real content
+  window.fetch = async () => ({ ok: true, json: async () => ({ assist: 'Try grilled chicken, quinoa and roasted veg.' }) });
+  $('#fab').click(); await wait(30);
+  $('#ef-title').value = 'plan a healthy meal';
+  $('#ef-assist') ? ok('Get-an-idea button in editor when AI on') : bad('assist button', 'missing');
+  if ($('#ef-assist')) { $('#ef-assist').click(); await wait(40); }
+  ($('#ef-aiout .ai-card') && /grilled chicken/.test($('#ef-aiout').textContent)) ? ok('assist returns real content (a meal idea)') : bad('assist render', $('#ef-aiout') && $('#ef-aiout').textContent);
+  if (window.closeSheet) window.closeSheet();
+
+  // proactive help — multi-question flow (mocked)
+  (window.aiClean && window.aiClean('**Hi** there') === 'Hi there') ? ok('aiClean strips markdown') : bad('aiClean', window.aiClean && window.aiClean('**Hi** there'));
+  window.fetch = async () => ({ ok: true, json: async () => ({ help: 'Just one stretch right now counts.' }) });
+  const fakeLag = { id: 'pq', title: 'Stretch', type: 'weekly', target: 3, completions: [] };
+  const helpCard = document.createElement('div');
+  if (window.aiHelp) window.aiHelp(fakeLag, helpCard); await wait(10);
+  helpCard.querySelector('.help-chips .chip') ? ok('proactive help asks a question (chips)') : bad('help q1', 'no chips');
+  const b1 = [...helpCard.querySelectorAll('.help-chips .chip')].find(c => /Energy/.test(c.textContent)); if (b1) b1.click(); await wait(10);
+  const t1 = [...helpCard.querySelectorAll('.help-chips .chip')].find(c => /10 minutes/.test(c.textContent)); if (t1) t1.click(); await wait(40);
+  (/AI-generated/.test(helpCard.textContent) && /one stretch/.test(helpCard.textContent)) ? ok('multi-question help renders a tailored tip') : bad('help flow', helpCard.textContent);
+
+  // feedback button
+  window.setView('settings'); await wait(10);
+  $('#feedbackBtn') ? ok('feedback button present in settings') : bad('feedback btn', 'missing');
+
   // ---- Google Calendar (read-only) ----
   const SS = JSON.parse(window.localStorage.getItem('tally.v1'));
   ('gcalConnected' in SS.settings) ? ok('calendar setting present in state') : bad('gcal setting', 'missing');
