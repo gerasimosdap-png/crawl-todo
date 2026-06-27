@@ -1,0 +1,16 @@
+{
+  "name": "Tally — your week, tracked gently",
+  "short_name": "Tally",
+  "description": "A calm personal task tracker. Daily tasks, weekly goals, and clear charts. Monday to Sunday.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f2ec",
+  "theme_color": "#7a8a7c",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

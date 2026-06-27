@@ -147,7 +147,7 @@ const todayKey = () => startOfDay(new Date()).getTime();
 
 function parseQuest(input) {
   let text = ' ' + input.trim() + ' ';
-  const res = { title: '', due: null, hasTime: false, repeat: null, priority: 0, project: null, boss: false };
+  const res = { title: '', due: null, hasTime: false, repeat: null, priority: 0, project: null, boss: false, habit: null };
 
   // Priority via trailing/!! bangs.  !!! = boss + top priority
   const bang = input.match(/!{1,3}/g);
@@ -180,9 +180,9 @@ function parseQuest(input) {
   if (mm2 = text.match(/\b(first|second|third|fourth|fifth|last|1st|2nd|3rd|4th|5th)\s+(sun|mon|tue|tues|wed|weds|thu|thur|thurs|fri|sat)(?:day|s|nesday|rsday|urday)?\s+of\s+(?:the\s+|each\s+|every\s+)?month\b/i)) {
     const ord = ORD[mm2[1].toLowerCase()]; const wd = WD[mm2[2].toLowerCase()];
     res.repeat = 'mwd:' + ord + ':' + wd; date = nextNthWeekday(now, ord, wd); text = text.replace(mm2[0], ' ');
-  } else if (rm = text.match(/\b(once|twice|thrice|one|two|three|four|five|six|seven|\d+)\s*(?:x|times)?\s*(?:a|per|each|\/)\s*week\b/i)) {
-    let n = NUMWORD[rm[1].toLowerCase()] || parseInt(rm[1], 10) || 2; n = Math.max(1, Math.min(7, n));
-    const set = COUNTSET[n]; res.repeat = 'wd:' + set.join(','); date = seedWdSet(set); text = text.replace(rm[0], ' ');
+  } else if (rm = text.match(/\b(once|twice|thrice|one|two|three|four|five|six|seven|\d+)\s*(?:x|times)?\s*(?:a|per|each|\/)\s*(day|week)\b/i)) {
+    let n = NUMWORD[rm[1].toLowerCase()] || parseInt(rm[1], 10) || 2; n = Math.max(1, Math.min(21, n));
+    res.habit = { target: n, period: rm[2].toLowerCase() }; text = text.replace(rm[0], ' ');
   } else if (/\b(weekends|every\s*weekend)\b/i.test(text)) { res.repeat = 'wd:0,6'; date = seedWdSet([0,6]); text = text.replace(/\b(weekends|every\s*weekend)\b/i, ' '); }
   else if (/\b(weekdays|every\s*weekday|every\s*work\s*day)\b/i.test(text)) { res.repeat = 'weekdays'; date = seedWdSet([1,2,3,4,5]); text = text.replace(/\b(weekdays|every\s*weekday|every\s*work\s*day)\b/i, ' '); }
   else if (rm = text.match(/\bevery\s+other\s+(day|week|month)\b/i)) { const u = rm[1].toLowerCase(); res.repeat = u === 'day' ? 'day2' : u === 'week' ? 'week2' : 'month2'; date = startOfDay(now); text = text.replace(rm[0], ' '); }
@@ -323,7 +323,8 @@ function addTask(input) {
     id: 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     title: p.title, due: p.due, hasTime: p.hasTime, repeat: p.repeat,
     priority: p.priority, project: p.project, boss: p.boss,
-    done: false, createdAt: Date.now(), completedAt: null, notified: false, xp
+    done: false, createdAt: Date.now(), completedAt: null, notified: false, xp,
+    habit: p.habit || null, habitCount: 0, habitKey: p.habit ? habitPeriodKey(p.habit.period) : null
   };
   S.tasks.unshift(task);
   save();
@@ -407,6 +408,30 @@ function spawnNext(task) {
   });
 }
 
+function weekStartKey() { const d = startOfDay(new Date()); const dow = (d.getDay() + 6) % 7; return startOfDay(addDays(d, -dow)).getTime(); }
+function habitPeriodKey(period) { return period === 'day' ? todayKey() : weekStartKey(); }
+function ensureHabitPeriod(t) { if (!t.habit) return; const k = habitPeriodKey(t.habit.period); if (t.habitKey !== k) { t.habitKey = k; t.habitCount = 0; } }
+function habitTick(t) {
+  ensureHabitPeriod(t);
+  t.habitCount = (t.habitCount || 0) + 1;
+  const gainXp = t.xp || 12, gainGold = 5 + Math.floor(Math.random() * 10), prevLevel = S.level;
+  S.xp += gainXp; S.gold += gainGold; S.totalCleared++; S.level = levelFromXp(S.xp);
+  const tk = todayKey();
+  if (S.lastClearDay !== tk) {
+    const gap = S.lastClearDay == null ? null : Math.round((tk - S.lastClearDay) / 86400000);
+    if (gap === null) S.streak = 1; else if (gap === 1) S.streak++; else if (gap === 2) { S.streak++; S.freezesUsed++; } else S.streak = 1;
+    S.lastClearDay = tk; S.bestStreak = Math.max(S.bestStreak, S.streak);
+  }
+  save();
+  const met = t.habitCount >= t.habit.target;
+  systemLog('<span class="sys-prefix">[SYSTEM]</span> ' + (met ? ('Done ' + t.habit.target + 'x this ' + t.habit.period + '. The System nods.') : (t.habitCount + ' of ' + t.habit.target + ' this ' + t.habit.period + '. Keep the chain alive.')));
+  lootToast(gainXp, gainGold, false);
+  pulse('#xpFill'); pulse('#goldStat'); pulse('#streakStat');
+  sfx('clear'); if (S.settings.haptics && navigator.vibrate) navigator.vibrate(18);
+  checkAchievements({ wasOverdue: false, task: t });
+  if (S.level > prevLevel) setTimeout(() => levelUp(S.level), 650);
+  updateHUD(); render();
+}
 function deleteTask(id) { S.tasks = S.tasks.filter(t => t.id !== id); save(); render(); }
 function efRenderSubs() {
   const c = $('#ef-subs'); if (!c) return;
@@ -456,6 +481,11 @@ function openEditor(task) {
       </select>
       <div class="ef-label">Project</div>
       <input class="ef-input" id="ef-project" placeholder="e.g. home, work" value="${(task.project||'')}" />
+      <div class="ef-label">Habit target (optional) &mdash; do it X times per period</div>
+      <div class="ef-row">
+        <input class="ef-input" type="number" id="ef-htarget" min="0" max="21" placeholder="e.g. 3" value="${task.habit ? task.habit.target : ''}" />
+        <select class="ef-input" id="ef-hperiod"><option value="week">per week</option><option value="day">per day</option></select>
+      </div>
       <div class="ef-label">Sub-tasks</div>
       <div id="ef-subs"></div>
       <button type="button" class="mini-btn" id="ef-addsub" style="margin-top:8px">+ Add sub-task</button>
@@ -468,6 +498,7 @@ function openEditor(task) {
     </div>`;
   m.hidden = false;
   $('#ef-interval').value = intervalSel;
+  if ($('#ef-hperiod')) $('#ef-hperiod').value = (task.habit && task.habit.period) || 'week';
   efSubs = (task.subtasks || []).map(s => ({ ...s }));
   efRenderSubs();
   $('#ef-notes').value = task.notes || '';
@@ -501,9 +532,13 @@ function saveEditor(task) {
   if (days.length) repeat = (days.length === 5 && days.join(',') === '1,2,3,4,5') ? 'weekdays' : 'wd:' + days.join(',');
   else { const iv = $('#ef-interval').value; repeat = iv === 'none' ? null : iv; }
   const project = ($('#ef-project').value.trim().replace(/^#/, '')) || null;
+  const ht = $('#ef-htarget') ? parseInt($('#ef-htarget').value, 10) : 0;
+  const habit = (ht && ht > 0) ? { target: Math.min(21, ht), period: ($('#ef-hperiod') ? $('#ef-hperiod').value : 'week') } : null;
   const subtasks = efSubs.filter(s => (s.title || '').trim()).map(s => ({ id: s.id, title: s.title.trim(), done: !!s.done }));
   const notes = $('#ef-notes') ? $('#ef-notes').value.trim() : (task.notes || '');
-  Object.assign(task, { title, due, hasTime, priority, boss, repeat, project, notes, subtasks, notified: false, xp: (boss ? 40 : 0) + [10,25,18,12][priority] });
+  Object.assign(task, { title, due, hasTime, priority, boss, repeat, project, notes, subtasks, habit, notified: false, xp: (boss ? 40 : 0) + [10,25,18,12][priority] });
+  if (habit && !task.habitKey) { task.habitCount = task.habitCount || 0; task.habitKey = habitPeriodKey(habit.period); }
+  if (!habit) { task.habitCount = 0; task.habitKey = null; }
   if (S.settings && S.settings.gcalSync && task.due && window.gcalPushTask) window.gcalPushTask(task);
   save(); closeEditor(); render();
 }
@@ -565,7 +600,7 @@ function render() {
   const now = Date.now(), sod = todayKey();
 
   // counts
-  $('#count-today').textContent = active.filter(t => t.due != null && t.due < sod + 86400000).length || '';
+  $('#count-today').textContent = (active.filter(t => t.due != null && t.due < sod + 86400000).length + active.filter(t => t.habit).length) || '';
   $('#count-upcoming').textContent = active.filter(t => t.due != null && t.due >= sod + 86400000).length || '';
   $('#count-backlog').textContent = active.filter(t => t.due == null).length || '';
   $('#count-done').textContent = '';
@@ -584,9 +619,11 @@ function render() {
 
   let groups = [];
   if (currentView === 'today') {
-    const overdue = active.filter(t => t.due != null && t.due < sod).sort(byDue);
-    const today = active.filter(t => t.due != null && t.due >= sod && t.due < sod + 86400000).sort(byDue);
-    const noDate = active.filter(t => t.due == null).sort(byPrio);
+    const habits = active.filter(t => t.habit);
+    const overdue = active.filter(t => !t.habit && t.due != null && t.due < sod).sort(byDue);
+    const today = active.filter(t => !t.habit && t.due != null && t.due >= sod && t.due < sod + 86400000).sort(byDue);
+    const noDate = active.filter(t => !t.habit && t.due == null).sort(byPrio);
+    if (habits.length) groups.push(['Habits', habits]);
     if (overdue.length) groups.push(['Overdue', overdue, 'overdue']);
     if (today.length) groups.push(['Today', today]);
     if (noDate.length) groups.push(['No deadline', noDate]);
@@ -626,10 +663,13 @@ const byPrio = (a, b) => (a.priority || 4) - (b.priority || 4) || (a.due || 9e15
 
 function questEl(t) {
   const el = document.createElement('div');
-  el.className = 'quest' + (t.priority ? ' p' + t.priority : '') + (t.boss ? ' boss' : '') + (t.done ? ' done' : '');
+  if (t.habit) ensureHabitPeriod(t);
+  const habitMet = !!(t.habit && (t.habitCount || 0) >= t.habit.target);
+  el.className = 'quest' + (t.priority ? ' p' + t.priority : '') + (t.boss ? ' boss' : '') + ((t.done || habitMet) ? ' done' : '');
   el.dataset.id = t.id;
 
   const meta = [];
+  if (t.habit) meta.push(`<span class="q-tag habit">&#8635; ${t.habitCount || 0}/${t.habit.target} this ${t.habit.period}</span>`);
   if (t.boss) meta.push('<span class="q-tag boss">☠ BOSS</span>');
   else if (t.priority === 1) meta.push('<span class="q-tag prio p1">‼ High</span>');
   else if (t.priority === 2) meta.push('<span class="q-tag prio p3">! Low</span>');
@@ -662,6 +702,7 @@ function questEl(t) {
 
   el.querySelector('.check').addEventListener('click', (e) => {
     e.stopPropagation();
+    if (t.habit) { habitTick(t); return; }
     if (!t.done) { el.classList.add('clearing'); confettiBurst(el); setTimeout(() => clearTask(t), 0); setTimeout(render, 480); }
     else clearTask(t);
   });
@@ -878,7 +919,6 @@ function openSheet() {
       <button class="switch ${S.settings.sound?'on':''}" id="soundSwitch"></button></div>
     <div class="opt-row"><div class="lbl">Focus mode <small>Hide XP, gold &amp; level &mdash; just your tasks</small></div>
       <button class="switch ${S.settings.focusMode?'on':''}" id="focusSwitch"></button></div>
-    <div class="opt-row"><div class="lbl">Theme</div><div class="theme-dots">${dots}</div></div>
     <div class="opt-row"><div class="lbl">Haptics <small>Vibrate on clear &amp; level up (Android)</small></div>
       <button class="switch ${S.settings.haptics?'on':''}" id="hapticSwitch"></button></div>
     <div class="opt-row" style="display:block">
@@ -928,7 +968,6 @@ function openSheet() {
   $('#soundSwitch').onclick = (e) => { S.settings.sound = !S.settings.sound; save(); e.target.classList.toggle('on', S.settings.sound); if (S.settings.sound) sfx('clear'); };
   $('#focusSwitch').onclick = (e) => { S.settings.focusMode = !S.settings.focusMode; save(); e.target.classList.toggle('on', S.settings.focusMode); applyTheme(); };
   $('#nameInput').onchange = (e) => { S.name = e.target.value.trim() || 'Crawler'; save(); updateHUD(); };
-  $$('[data-theme-set]').forEach(b => b.onclick = () => { setTheme(b.dataset.themeSet); $$('[data-theme-set]').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });
     if ($('#hapticSwitch')) $('#hapticSwitch').onclick = (e) => { S.settings.haptics = !S.settings.haptics; save(); e.target.classList.toggle('on', S.settings.haptics); if (S.settings.haptics && navigator.vibrate) navigator.vibrate(20); };
     if ($('#qStart')) $('#qStart').onchange = (e) => { S.settings.quietStart = parseInt(e.target.value.split(':')[0], 10) || 0; save(); };
     if ($('#qEnd')) $('#qEnd').onchange = (e) => { S.settings.quietEnd = parseInt(e.target.value.split(':')[0], 10) || 0; save(); };

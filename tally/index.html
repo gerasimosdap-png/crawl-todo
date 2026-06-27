@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <title>Tally</title>
+  <meta name="description" content="A calm personal task tracker — daily tasks, weekly goals, and clear charts. Monday to Sunday." />
+  <meta name="theme-color" content="#7a8a7c" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Tally" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- HEADER -->
+    <header id="top">
+      <div class="top-row">
+        <div class="top-greeting">
+          <div class="greet" id="greet">Hello</div>
+          <div class="subgreet" id="weekLabel">This week</div>
+        </div>
+        <div class="week-dots" id="weekDots" aria-label="Your week, Monday to Sunday"></div>
+      </div>
+    </header>
+
+    <!-- VIEWS -->
+    <main id="main">
+      <section class="view" id="view-today" data-view="today"></section>
+      <section class="view" id="view-tasks" data-view="tasks" hidden></section>
+      <section class="view" id="view-stats" data-view="stats" hidden></section>
+      <section class="view" id="view-settings" data-view="settings" hidden></section>
+    </main>
+
+    <!-- BOTTOM NAV -->
+    <nav id="nav" aria-label="Main tabs">
+      <button class="navbtn active" data-view="today" aria-label="Today">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4 10-10"/></svg>
+        <span>Today</span>
+      </button>
+      <button class="navbtn" data-view="tasks" aria-label="Tasks">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="7" x2="20" y2="7"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="17" x2="20" y2="17"/><circle cx="4" cy="7" r="1.2"/><circle cx="4" cy="12" r="1.2"/><circle cx="4" cy="17" r="1.2"/></svg>
+        <span>Tasks</span>
+      </button>
+      <button class="navbtn" data-view="stats" aria-label="Stats">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="9"/></svg>
+        <span>Stats</span>
+      </button>
+      <button class="navbtn" data-view="settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Floating add button -->
+  <button id="fab" aria-label="Add a task">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+
+  <!-- Gentle toast -->
+  <div id="toast" class="toast" aria-live="polite" hidden></div>
+
+  <!-- Editor sheet (add / edit a task) -->
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-card" role="dialog" aria-modal="true">
+      <div class="sheet-grip"></div>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
+  <!-- Suggestion / info popover -->
+  <div id="infoPop" class="info-pop" hidden></div>
+
+  <!-- Celebration + reward prompt -->
+  <div id="celebrate" class="celebrate" hidden></div>
+
+  <!-- Onboarding -->
+  <div id="intro" class="intro" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

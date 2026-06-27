@@ -463,3 +463,6 @@ body.focus .avatar::after { display: none; }
 
 /* Light theme: darker accent for contrast on white */
 [data-theme="light"] { --sys:#1d9e75; --sys-glow:rgba(29,158,117,.30); }
+
+/* Habit progress chip */
+.q-tag.habit { color: var(--sys); }
