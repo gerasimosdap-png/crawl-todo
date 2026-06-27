@@ -25,7 +25,7 @@ const defaultState = () => ({
   askedNotify: false,
   onboarded: false,
   unlocked: [],
-  settings: { theme: 'dark', sound: true, haptics: true, notify: false, quietStart: 22, quietEnd: 7, gcalClientId: '', gcalConnected: false, gcalSync: false, gcalShow: true, feedbackUrl: '', syncEnabled: false },
+  settings: { theme: 'dark', sound: true, haptics: true, notify: false, quietStart: 22, quietEnd: 7, gcalClientId: '', gcalConnected: false, gcalSync: false, gcalShow: true, feedbackUrl: '', syncEnabled: false, focusMode: false },
   tasks: []
 });
 
@@ -309,9 +309,7 @@ function addTask(input) {
   // Permission priming at the moment of intent: only when they first set a timed quest
   if (task.hasTime && !S.settings.notify && !S.askedNotify && ('Notification' in window)) {
     S.askedNotify = true; save();
-    setTimeout(() => {
-      if (confirm('This quest has a time. Want the System to remind you when it comes due?')) enableNotifications();
-    }, 400);
+    setTimeout(() => systemLog('<span class="sys-prefix">[SYSTEM]</span> Want a nudge when timed quests are due? Turn on Reminders in the menu.'), 700);
   }
   if (S.settings.gcalSync && task.due && window.gcalPushTask) window.gcalPushTask(task);
   return task;
@@ -713,6 +711,7 @@ function toast(ico, html) {
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 320); }, 2600);
 }
 function lootToast(xp, gold, boss) {
+  if (S.settings.focusMode) return;
   const drop = Math.random() < (boss ? 0.9 : 0.35) ? pick(LOOT) : null;
   let sub = `+${xp} XP &nbsp;·&nbsp; +${gold} ◈ gold`;
   if (drop) sub += `<br>Loot: ${drop.ico} ${drop.name}`;
@@ -720,7 +719,7 @@ function lootToast(xp, gold, boss) {
 }
 function pulse(sel) { const e = $(sel); if (!e) return; const tgt = e.closest('.stat') || e; tgt.classList.add('pulse'); setTimeout(() => tgt.classList.remove('pulse'), 420); }
 function confettiBurst(anchor) {
-  if (reduceMotion()) return;
+  if (reduceMotion() || S.settings.focusMode) return;
   const r = anchor.getBoundingClientRect();
   const cols = ['#5fd896','#f3c969','#ffb454','#5fb0ff','#ff6b6b','#b07dff'];
   for (let i = 0; i < 14; i++) {
@@ -853,6 +852,8 @@ function openSheet() {
       <button class="switch ${S.settings.notify?'on':''}" id="notifSwitch"></button></div>
     <div class="opt-row"><div class="lbl">Sound FX <small>System chimes on clear / level up</small></div>
       <button class="switch ${S.settings.sound?'on':''}" id="soundSwitch"></button></div>
+    <div class="opt-row"><div class="lbl">Focus mode <small>Hide XP, gold &amp; level &mdash; just your tasks</small></div>
+      <button class="switch ${S.settings.focusMode?'on':''}" id="focusSwitch"></button></div>
     <div class="opt-row"><div class="lbl">Theme</div><div class="theme-dots">${dots}</div></div>
     <div class="opt-row"><div class="lbl">Haptics <small>Vibrate on clear &amp; level up (Android)</small></div>
       <button class="switch ${S.settings.haptics?'on':''}" id="hapticSwitch"></button></div>
@@ -901,6 +902,7 @@ function openSheet() {
 
   $('#notifSwitch').onclick = async (e) => { if (!S.settings.notify) { const ok = await enableNotifications(); e.target.classList.toggle('on', ok); } else { S.settings.notify = false; save(); e.target.classList.remove('on'); } };
   $('#soundSwitch').onclick = (e) => { S.settings.sound = !S.settings.sound; save(); e.target.classList.toggle('on', S.settings.sound); if (S.settings.sound) sfx('clear'); };
+  $('#focusSwitch').onclick = (e) => { S.settings.focusMode = !S.settings.focusMode; save(); e.target.classList.toggle('on', S.settings.focusMode); applyTheme(); };
   $('#nameInput').onchange = (e) => { S.name = e.target.value.trim() || 'Crawler'; save(); updateHUD(); };
   $$('[data-theme-set]').forEach(b => b.onclick = () => { setTheme(b.dataset.themeSet); $$('[data-theme-set]').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); });
     if ($('#hapticSwitch')) $('#hapticSwitch').onclick = (e) => { S.settings.haptics = !S.settings.haptics; save(); e.target.classList.toggle('on', S.settings.haptics); if (S.settings.haptics && navigator.vibrate) navigator.vibrate(20); };
@@ -924,7 +926,7 @@ function openSheet() {
 }
 
 function setTheme(t) { S.settings.theme = t; save(); applyTheme(); }
-function applyTheme() { document.documentElement.setAttribute('data-theme', S.settings.theme); }
+function applyTheme() { document.documentElement.setAttribute('data-theme', S.settings.theme); if (document.body) document.body.classList.toggle('focus', !!S.settings.focusMode); }
 
 function exportSave() {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });

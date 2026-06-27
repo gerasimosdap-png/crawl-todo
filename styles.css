@@ -449,3 +449,13 @@ body { background: var(--bg); }
 /* Slightly more breathing room, softer cards */
 .quest { border-radius: 14px; }
 #list { gap: 7px; }
+
+/* search icon button centering */
+.icon-btn { display: grid; place-items: center; }
+.icon-btn svg { display: block; }
+
+
+/* ---------- Focus mode ---------- */
+body.focus .stat.gold, body.focus .stat.streak, body.focus .xp-wrap, body.focus .hud-title { display: none !important; }
+body.focus .avatar::after { display: none; }
+.stat-ico svg { display: block; }
