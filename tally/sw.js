@@ -1,38 +1,58 @@
-/* Tally service worker — offline cache + notification handling */
-const CACHE = 'tally-v1';
-const ASSETS = [
+/* Tally service worker — offline cache + reliable updates + notifications */
+const VERSION = 'tally-v2';
+const CORE = [
   './', './index.html', './styles.css', './app.js',
   './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png'
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
+// App shell (html/css/js/manifest) = network-first so a fresh deploy shows up on next open.
+// Everything else (icons) = cache-first for speed/offline.
+function isShell(url) {
+  return /\.(html|css|js|webmanifest)$/.test(url.pathname) || url.pathname.endsWith('/');
+}
+
 self.addEventListener('fetch', (e) => {
   const { request } = e;
   if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+
+  if (isShell(url)) {
+    e.respondWith(
+      fetch(request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(VERSION).then((c) => { try { c.put(request, copy); } catch (_) {} });
+          return res;
+        })
+        .catch(() => caches.match(request).then((c) => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(request).then((cached) =>
-      cached ||
-      fetch(request).then((res) => {
+      cached || fetch(request).then((res) => {
         const copy = res.clone();
-        caches.open(CACHE).then((c) => { try { c.put(request, copy); } catch (_) {} });
+        caches.open(VERSION).then((c) => { try { c.put(request, copy); } catch (_) {} });
         return res;
       }).catch(() => cached)
     )
   );
 });
 
-// Reminder notifications triggered from the page
 self.addEventListener('message', (e) => {
   const d = e.data || {};
   if (d.type === 'notify' && self.registration && self.registration.showNotification) {

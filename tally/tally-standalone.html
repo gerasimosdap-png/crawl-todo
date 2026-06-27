@@ -642,7 +642,7 @@ function defaultState() {
   return {
     version: 1,
     tasks: [],
-    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '' },
+    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '', syncEnabled: false },
     onboarded: false,
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -654,7 +654,7 @@ function load() {
   if (!S.settings) S.settings = defaultState().settings;
   if (!Array.isArray(S.tasks)) S.tasks = [];
 }
-function save() { S.updatedAt = Date.now(); try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {} }
+function save() { S.updatedAt = Date.now(); try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {} if (typeof fbSchedulePush === 'function') fbSchedulePush(); }
 function uid() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
 /* ---------------- Task model helpers ----------------
@@ -1123,6 +1123,17 @@ function renderSettings() {
     const sw2 = el('label', 'switch'); sw2.innerHTML = '<input type="checkbox" id="gcalShowToggle"' + (S.settings.gcalShow !== false ? ' checked' : '') + '><span class="slider"></span>';
     srow.appendChild(sw2); cg.appendChild(srow);
   }
+  const srowSync = el('div', 'set-row');
+  if (fbUser) {
+    srowSync.innerHTML = '<div class="lblwrap"><div class="lbl">Device sync</div><div class="sub">Signed in as ' + escapeHtml(fbUser.email || 'your account') + ' \u00b7 tasks sync everywhere</div></div>';
+    const out = el('button', 'btn ghost', 'Sign out'); out.id = 'syncSignOut'; out.addEventListener('click', fbSignOut);
+    srowSync.appendChild(out);
+  } else {
+    srowSync.innerHTML = '<div class="lblwrap"><div class="lbl">Device sync</div><div class="sub">Back up &amp; sync your tasks across phone and laptop</div></div>';
+    const sin = el('button', 'btn ghost', 'Sign in'); sin.id = 'syncSignIn'; sin.addEventListener('click', fbSignIn);
+    srowSync.appendChild(sin);
+  }
+  cg.appendChild(srowSync);
   v.appendChild(cg);
   v.appendChild(el('div', 'about', 'Read-only \u2014 Tally shows your Google Calendar but never changes it. Needs Tally opened from its web address (not a local file).'));
 
@@ -1415,6 +1426,7 @@ function init() {
   setView('today');
   scheduleReminders();
   if (S.settings.gcalConnected) gcalInitSilent();
+  if (S.settings.syncEnabled) fbInit();
   if (!S.onboarded) showIntro();
 }
 
@@ -1542,6 +1554,100 @@ function openCelebrate(c) {
   $('#celebrateClose').addEventListener('click', closeCelebrate);
 }
 function closeCelebrate() { const o = $('#celebrate'); if (o) o.hidden = true; }
+
+/* ---------------- Cross-device sync (Firebase, optional) ---------------- */
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyCeqo307v6YKZjSYrnUGyNta95BXspisMM',
+  authDomain: 'compact-cell-500621-i6.firebaseapp.com',
+  projectId: 'compact-cell-500621-i6',
+  storageBucket: 'compact-cell-500621-i6.firebasestorage.app',
+  messagingSenderId: '136485291900',
+  appId: '1:136485291900:web:3c48db3c0ab0b02614c6f9'
+};
+let fbAuth = null, fbDb = null, fbUser = null, fbUnsub = null, fbReady = false, adoptingRemote = false, fbPushTimer = null;
+
+function loadFirebase() {
+  return new Promise((resolve, reject) => {
+    if (window.firebase && window.firebase.firestore) return resolve();
+    const base = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    const files = ['firebase-app-compat.js', 'firebase-auth-compat.js', 'firebase-firestore-compat.js'];
+    let i = 0;
+    const next = () => {
+      if (i >= files.length) return resolve();
+      const s = document.createElement('script');
+      s.src = base + files[i++]; s.onload = next;
+      s.onerror = () => reject(new Error('Could not load sync (check your connection).'));
+      document.head.appendChild(s);
+    };
+    next();
+  });
+}
+async function fbInit() {
+  if (fbReady) return;
+  await loadFirebase();
+  if (!window.firebase.apps.length) window.firebase.initializeApp(FIREBASE_CONFIG);
+  fbAuth = window.firebase.auth(); fbDb = window.firebase.firestore();
+  fbReady = true;
+  fbAuth.onAuthStateChanged((u) => {
+    fbUser = u;
+    S.settings.syncEnabled = !!u; try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+    if (u) fbStartSync(); else fbStopSync();
+    if (currentView === 'settings') renderSettings();
+  });
+}
+async function fbSignIn() {
+  try {
+    await fbInit();
+    if (location.protocol === 'file:') { toast('Sync needs Tally opened from its web address, not a local file.'); return; }
+    await fbAuth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
+  } catch (e) {
+    if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request')) {
+      try { await fbAuth.signInWithRedirect(new window.firebase.auth.GoogleAuthProvider()); } catch (_) {}
+    } else if (e && e.code !== 'auth/popup-closed-by-user') {
+      toast('Sign-in failed: ' + (e.message || e));
+    }
+  }
+}
+async function fbSignOut() { try { await fbAuth.signOut(); } catch (e) {} }
+function fbDocRef() { return fbDb.collection('users').doc(fbUser.uid).collection('apps').doc('tally'); }
+async function fbStartSync() {
+  if (!fbUser) return;
+  try {
+    const snap = await fbDocRef().get();
+    if (snap.exists) {
+      const d = snap.data();
+      if (d && d.updatedAt && (!S.updatedAt || d.updatedAt > S.updatedAt)) adoptRemote(d);
+      else fbPushNow();
+    } else { fbPushNow(); }
+    if (fbUnsub) fbUnsub();
+    fbUnsub = fbDocRef().onSnapshot((s) => {
+      if (!s.exists) return;
+      const d = s.data();
+      if (d && d.updatedAt && d.updatedAt > (S.updatedAt || 0)) adoptRemote(d);
+    });
+    toast('Synced. Your tasks now travel with you.');
+  } catch (e) {}
+}
+function fbStopSync() { if (fbUnsub) { fbUnsub(); fbUnsub = null; } }
+function adoptRemote(d) {
+  try {
+    const remote = JSON.parse(d.data);
+    adoptingRemote = true;
+    S = Object.assign(defaultState(), remote);
+    S.updatedAt = d.updatedAt;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) {}
+    adoptingRemote = false;
+    applyTheme(); renderHeader(); renderCurrent();
+  } catch (e) { adoptingRemote = false; }
+}
+function fbPushNow() {
+  if (!fbUser || !fbReady) return;
+  try { fbDocRef().set({ data: JSON.stringify(S), updatedAt: S.updatedAt || Date.now() }); } catch (e) {}
+}
+function fbSchedulePush() {
+  if (!fbUser || adoptingRemote) return;
+  clearTimeout(fbPushTimer); fbPushTimer = setTimeout(fbPushNow, 800);
+}
 
 
 </script>
