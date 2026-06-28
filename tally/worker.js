@@ -1,6 +1,6 @@
 /* ============================================================
    Tally AI — Cloudflare Worker (Gemini proxy)
-   modes: suggest, clarify, help, assist, reflect, stack
+   modes: suggest, clarify, help, assist, reflect, stack, coach, ask
    ============================================================ */
 
 const ALLOWED_ORIGIN = 'https://gerasimosdap-png.github.io';
@@ -21,7 +21,7 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400, cors); }
 
-    const mode = ['clarify', 'help', 'assist', 'reflect', 'stack'].includes(body.mode) ? body.mode : 'suggest';
+    const mode = ['clarify', 'help', 'assist', 'reflect', 'stack', 'coach', 'ask'].includes(body.mode) ? body.mode : 'suggest';
 
     const tasks = Array.isArray(body.tasks) ? body.tasks.slice(0, 40) : [];
     const weekPct = Number.isFinite(body.weekPct) ? body.weekPct : 0;
@@ -29,6 +29,8 @@ export default {
     const summary = tasks
       .map(t => `- ${String(t.title || '').slice(0, 80)} (${String(t.type || '')}): ${String(t.progress || '').slice(0, 40)}`)
       .join('\n');
+    const insights = String(body.insights || '').slice(0, 600);
+    const question = String(body.question || '').slice(0, 300);
 
     let prompt;
     if (mode === 'clarify') {
@@ -59,6 +61,22 @@ Task: ${title}`;
 Tasks:
 ${summary || '(no active tasks)'}
 Celebrate what they showed up for, gently note one pattern if you can see one, and frame it as identity ("you're becoming someone who…"). No guilt, no advice list, plain warm language. No preamble.`;
+    } else if (mode === 'coach') {
+      prompt =
+`You are a warm, sharp habit coach in a calm tracker called Tally. Using the user's real data, write a short coaching note under 75 words, in three beats: (1) a genuine win, (2) one pattern you notice, (3) one tiny, specific next step.
+Week: ${weekPct}% of planned, a ${streak}-day streak.
+Patterns detected: ${insights || '(none yet)'}
+Tasks:
+${summary || '(none)'}
+Warm, plain language, no guilt, no bulleted advice, no medical or diet advice. No preamble.`;
+    } else if (mode === 'ask') {
+      prompt =
+`The user is asking about their own habit-tracker data. Answer their question directly and warmly in under 80 words, grounded in the numbers below. If the data can't answer it, say so kindly and offer your best general tip. No medical, diet, or clinical advice. No preamble.
+Question: ${question}
+Week: ${weekPct}% of planned, a ${streak}-day streak.
+Patterns detected: ${insights || '(none yet)'}
+Tasks:
+${summary || '(none)'}`;
     } else {
       prompt =
 `You are a warm, encouraging habit coach inside a calm personal task-tracker called Tally, informed by James Clear's Atomic Habits.
@@ -95,7 +113,7 @@ Give ONE short suggestion (under 55 words) to help them this week. Be specific t
     try { text = data.candidates[0].content.parts[0].text.trim(); } catch (e) {}
     if (!text) return json({ error: 'empty' }, 502, cors);
 
-    const keyName = { clarify: 'clarified', help: 'help', assist: 'assist', reflect: 'reflection', stack: 'stack' }[mode] || 'suggestion';
+    const keyName = { clarify: 'clarified', help: 'help', assist: 'assist', reflect: 'reflection', stack: 'stack', coach: 'coach', ask: 'answer' }[mode] || 'suggestion';
     return json({ [keyName]: text }, 200, cors);
   },
 };

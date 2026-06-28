@@ -448,3 +448,12 @@ body {
 
 .ai-row { flex-wrap: wrap; }
 .ai-row .btn { flex: 1 1 30%; }
+
+/* ---- advanced Stats coach ---- */
+.insights { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+.insight { font-size: .9rem; color: var(--text); background: var(--surface-2); border-radius: 10px; padding: 8px 11px; line-height: 1.4; }
+.ask-wrap { display: flex; gap: 8px; margin-top: 10px; }
+.ask-input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: .92rem; }
+.ask-input:focus { outline: none; border-color: var(--accent); }
+.ask-wrap .btn { flex: none; }
+.ai-q { font-size: .82rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; }

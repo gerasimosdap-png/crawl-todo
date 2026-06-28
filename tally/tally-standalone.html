@@ -464,6 +464,15 @@ body {
 .ai-row { flex-wrap: wrap; }
 .ai-row .btn { flex: 1 1 30%; }
 
+/* ---- advanced Stats coach ---- */
+.insights { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
+.insight { font-size: .9rem; color: var(--text); background: var(--surface-2); border-radius: 10px; padding: 8px 11px; line-height: 1.4; }
+.ask-wrap { display: flex; gap: 8px; margin-top: 10px; }
+.ask-input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 12px; padding: 10px 12px; font: inherit; font-size: .92rem; }
+.ask-input:focus { outline: none; border-color: var(--accent); }
+.ask-wrap .btn { flex: none; }
+.ai-q { font-size: .82rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+
 </style>
 </head>
 <body>
@@ -943,7 +952,6 @@ function renderToday() {
     banner.appendChild(back);
     v.appendChild(banner);
   }
-  if (day.isToday) { renderProactive(v); renderReflectNudge(v); }
 
   const sched = S.tasks.filter(t => scheduledOnDate(t, d));
   if (sched.length === 0) {
@@ -1105,12 +1113,26 @@ function renderStats() {
   v.appendChild(ringCard);
   if (S.settings.aiEnabled) {
     const ac = el('div', 'stat-card');
-    const ab = el('button', 'btn block', '✨ Get a suggestion'); ab.id = 'aiBtn';
-    ab.addEventListener('click', aiSuggest);
+    ac.innerHTML = '<h3>Your coach</h3>';
+    const ins = computeInsights();
+    if (ins.length) {
+      const list = el('div', 'insights');
+      ins.forEach(s => { const r = el('div', 'insight'); r.textContent = s; list.appendChild(r); });
+      ac.appendChild(list);
+    } else {
+      ac.appendChild(el('p', 'hint', 'Complete a few tasks and your patterns will show up here.'));
+    }
+    const aout = el('div', null); aout.id = 'aiOut'; aout.style.margin = '12px 0 0';
+    const ab = el('button', 'btn block', '✨ Coach me'); ab.id = 'aiBtn';
+    ab.addEventListener('click', () => aiCoach(aout, ins));
     ac.appendChild(ab);
-    const rb = el('button', 'btn ghost block', '📝 Reflect on my week'); rb.id = 'aiReflectBtn'; rb.style.marginTop = '8px'; rb.addEventListener('click', () => aiReflect(aout));
-    ac.appendChild(rb);
-    const aout = el('div', null); aout.id = 'aiOut'; aout.style.marginTop = '12px';
+    const askWrap = el('div', 'ask-wrap');
+    const inp = el('input'); inp.id = 'aiAsk'; inp.className = 'ask-input'; inp.placeholder = 'Ask about your habits…'; inp.setAttribute('aria-label', 'Ask about your habits');
+    inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') aiAsk(aout, inp.value, ins); });
+    const askBtn = el('button', 'btn ghost', 'Ask'); askBtn.id = 'aiAskBtn';
+    askBtn.addEventListener('click', () => aiAsk(aout, inp.value, ins));
+    askWrap.appendChild(inp); askWrap.appendChild(askBtn);
+    ac.appendChild(askWrap);
     ac.appendChild(aout);
     v.appendChild(ac);
   }
@@ -1800,7 +1822,7 @@ function openAIConsent() {
   o.innerHTML = '<div class="celebrate-card" role="dialog" aria-modal="true">'
     + '<div class="celebrate-emoji">✨</div>'
     + '<h2 class="celebrate-title">Smart suggestions</h2>'
-    + '<p class="celebrate-body">Get one gentle, specific tip drawn from your week. Tap “Get a suggestion” on Stats whenever you like.</p>'
+    + '<p class="celebrate-body">Get one gentle, specific tip drawn from your week. Tap “Coach me” on Stats whenever you like, or ask it anything about your habits.</p>'
     + '<div class="reward-callout"><span class="reward-ico">🔒</span><span>When on, Tally shares only this week’s task names and progress — never your notes or history.</span></div>'
     + '<div class="sheet-actions"><button class="btn ghost" id="aiNo">Not now</button><button class="btn" id="aiYes">Turn on</button></div>'
     + '</div>';
@@ -1808,21 +1830,62 @@ function openAIConsent() {
   $('#aiYes').addEventListener('click', () => { S.settings.aiEnabled = true; save(); closeCelebrate(); renderSettings(); });
   $('#aiNo').addEventListener('click', () => { closeCelebrate(); renderSettings(); });
 }
-async function aiSuggest() {
-  const out = $('#aiOut'); if (!out) return;
+async function aiCoach(out, insights) {
+  if (!out) return;
+  if (!AI_WORKER_URL) { out.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
+  out.innerHTML = '<div class="ai-loading">Reading your week…</div>';
+  try {
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ mode: 'coach', insights: (insights || []).join(' ') }, aiPayload())) });
+    const data = await res.json();
+    const text = data && (data.coach || data.suggestion);
+    if (res.ok && text) {
+      out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a coach, not gospel</div></div>';
+      out.querySelector('.ai-text').textContent = aiClean(text);
+    } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reach your coach right now — try again in a moment.</div>'; }
+  } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reach your coach right now — try again in a moment.</div>'; }
+}
+async function aiAsk(out, question, insights) {
+  if (!out) return;
+  const q = (question || '').trim();
+  if (!q) { const i = $('#aiAsk'); if (i) i.focus(); return; }
   if (!AI_WORKER_URL) { out.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
   out.innerHTML = '<div class="ai-loading">Thinking…</div>';
   try {
-    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(aiPayload()) });
-    if (!res.ok) throw new Error('http');
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ mode: 'ask', question: q, insights: (insights || []).join(' ') }, aiPayload())) });
     const data = await res.json();
-    const text = (data && data.suggestion) ? String(data.suggestion) : '';
-    if (!text) throw new Error('empty');
-    out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a suggestion, not gospel</div></div>';
-    out.querySelector('.ai-text').textContent = aiClean(text);
-  } catch (e) {
-    out.innerHTML = '<div class="about" style="padding:0">Couldn’t get a suggestion right now — try again in a moment.</div>';
-  }
+    const text = data && (data.answer || data.suggestion);
+    if (res.ok && text) {
+      out.innerHTML = '<div class="ai-card"><div class="ai-q"></div><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — based on your data</div></div>';
+      out.querySelector('.ai-q').textContent = q;
+      out.querySelector('.ai-text').textContent = aiClean(text);
+    } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t answer right now — try again.</div>'; }
+  } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t answer right now — try again.</div>'; }
+}
+const DOW_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+function completionsByWeekday(weeks) {
+  const counts = [0, 0, 0, 0, 0, 0, 0];
+  const cutoff = mondayOf(new Date()); cutoff.setDate(cutoff.getDate() - (weeks - 1) * 7);
+  const ck = dateKey(cutoff);
+  allCompletionDays().forEach(d => { if (d >= ck) counts[(new Date(d + 'T12:00:00').getDay() + 6) % 7]++; });
+  return counts;
+}
+function computeInsights() {
+  const out = [];
+  if (allCompletionDays().length < 3) return out;
+  const wd = completionsByWeekday(8);
+  const mx = Math.max(...wd);
+  if (mx > 0) out.push('🗓️ Your strongest day is ' + DOW_FULL[wd.indexOf(mx)] + '.');
+  const wts = weeklyTotals(2);
+  const last = wts[0].count, now = wts[1].count;
+  if (last || now) out.push(now > last ? '📈 You’re ahead of last week (' + now + ' vs ' + last + ').' : now < last ? '🌱 A little behind last week (' + now + ' vs ' + last + ') — easy to close.' : '⚖️ Holding steady with last week (' + now + ').');
+  const active = S.tasks.filter(t => !t.archived && (t.type === 'weekly' || t.type === 'daily' || t.type === 'weekdays'));
+  let best = null, bestRatio = -1;
+  active.forEach(t => {
+    const ratio = t.type === 'weekly' ? (t.target ? compsThisWeek(t) / t.target : 0) : daysDoneThisWeek(t) / 7;
+    if (ratio > bestRatio) { bestRatio = ratio; best = t; }
+  });
+  if (best && bestRatio > 0) out.push('🔥 Most consistent this week: ' + best.title + '.');
+  return out;
 }
 
 async function aiClarify() {
@@ -1864,77 +1927,9 @@ function openFeedback() {
   });
 }
 
-/* ---------------- Proactive check-in (AI, opt-in) ---------------- */
-function laggingGoal() {
-  if (!S.settings.aiEnabled) return null;
-  const dim = dowMon(new Date());          // 0 = Mon ... 6 = Sun
-  if (dim < 2) return null;                 // only nudge from Wednesday on
-  const wk = weekKey();
-  for (const t of S.tasks) {
-    if (t.archived || t.type !== 'weekly') continue;
-    const done = compsThisWeek(t);
-    if (done >= t.target) continue;
-    const daysLeft = 7 - dim;               // includes today
-    const need = t.target - done;
-    const behind = need > daysLeft || (done === 0) || (done / t.target) < ((dim + 1) / 7) * 0.5;
-    if (!behind) continue;
-    if (S.settings.proactiveDismiss === wk + '|' + t.id) continue;
-    return t;
-  }
-  return null;
-}
-function renderProactive(v) {
-  const t = laggingGoal();
-  if (!t) return;
-  const card = el('div', 'proactive');
-  card.innerHTML = '<div class="pro-row"><span class="pro-ico">\ud83e\udd1d</span><div class="pro-text">A little behind on <b>' + escapeHtml(t.title) + '</b> this week \u2014 want a hand?</div></div>';
-  const acts = el('div', 'pro-acts');
-  const yes = el('button', 'btn', 'Yes, help'); yes.addEventListener('click', () => aiHelp(t, card));
-  const no = el('button', 'btn ghost', 'Not now'); no.addEventListener('click', () => { S.settings.proactiveDismiss = weekKey() + '|' + t.id; save(); renderToday(); });
-  acts.appendChild(yes); acts.appendChild(no);
-  card.appendChild(acts);
-  v.appendChild(card);
-}
 function aiClean(s) {
   return String(s || '').replace(/\*\*/g, '').replace(/^\s*[\*\-]\s+/gm, '• ').replace(/`/g, '').trim();
 }
-function aiHelp(t, card) { askHelpBlocker(t, card); }
-function askHelpBlocker(t, card) {
-  card.innerHTML = '<div class="pro-text" style="margin-bottom:10px">What’s getting in the way of <b>' + escapeHtml(t.title) + '</b>?</div>';
-  const chips = el('div', 'help-chips');
-  ['Time', 'Energy', 'Not sure how', 'Motivation'].forEach(b => {
-    const ch = el('button', 'chip', b); ch.type = 'button';
-    ch.addEventListener('click', () => askHelpTime(t, card, b));
-    chips.appendChild(ch);
-  });
-  card.appendChild(chips);
-}
-function askHelpTime(t, card, blocker) {
-  card.innerHTML = '<div class="pro-text" style="margin-bottom:10px">How much time do you realistically have today?</div>';
-  const chips = el('div', 'help-chips');
-  ['2 minutes', '10 minutes', '20+ minutes'].forEach(tm => {
-    const ch = el('button', 'chip', tm); ch.type = 'button';
-    ch.addEventListener('click', () => fetchHelp(t, card, blocker, tm));
-    chips.appendChild(ch);
-  });
-  card.appendChild(chips);
-}
-async function fetchHelp(t, card, blocker, time) {
-  if (!AI_WORKER_URL) { card.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
-  card.innerHTML = '<div class="ai-loading">Thinking…</div>';
-  const progress = compsThisWeek(t) + '/' + t.target + ' this week. Their main blocker: ' + blocker + '. Time available today: ' + time + '.';
-  try {
-    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'help', title: t.title, progress }) });
-    const data = await res.json();
-    const text = data && (data.help || data.suggestion);
-    if (res.ok && text) {
-      card.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a suggestion, not gospel</div></div>';
-      card.querySelector('.ai-text').textContent = aiClean(text);
-      S.settings.proactiveDismiss = weekKey() + '|' + t.id; save();
-    } else { card.innerHTML = '<div class="about" style="padding:0">Couldn’t fetch a tip right now — try again later.</div>'; }
-  } catch (e) { card.innerHTML = '<div class="about" style="padding:0">Couldn’t fetch a tip right now — try again later.</div>'; }
-}
-
 async function aiAssist() {
   const titleEl = $('#ef-title'); const out = $('#ef-aiout'); if (!titleEl || !out) return;
   const t = (titleEl.value || '').trim();
@@ -1953,20 +1948,6 @@ async function aiAssist() {
 }
 
 /* ---------------- Weekly reflection + habit-stacking + trends ---------------- */
-async function aiReflect(out) {
-  if (!out) return;
-  if (!AI_WORKER_URL) { out.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
-  out.innerHTML = '<div class="ai-loading">Reflecting…</div>';
-  try {
-    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ mode: 'reflect' }, aiPayload())) });
-    const data = await res.json();
-    const text = data && (data.reflection || data.suggestion);
-    if (res.ok && text) {
-      out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a reflection, not gospel</div></div>';
-      out.querySelector('.ai-text').textContent = aiClean(text);
-    } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reflect right now — try again later.</div>'; }
-  } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reflect right now — try again later.</div>'; }
-}
 async function aiStack() {
   const titleEl = $('#ef-title'); const out = $('#ef-aiout'); if (!titleEl || !out) return;
   const t = (titleEl.value || '').trim();
@@ -1983,19 +1964,6 @@ async function aiStack() {
       out.querySelector('.ai-text').textContent = aiClean(text);
     } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t suggest a cue right now.</div>'; }
   } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t suggest a cue right now.</div>'; }
-}
-function renderReflectNudge(v) {
-  if (!S.settings.aiEnabled) return;
-  if (dowMon(new Date()) !== 6) return;
-  if (S.settings.reflectDismiss === weekKey()) return;
-  const card = el('div', 'proactive');
-  card.innerHTML = '<div class="pro-row"><span class="pro-ico">📝</span><div class="pro-text">It’s Sunday — want to reflect on your week?</div></div>';
-  const acts = el('div', 'pro-acts');
-  const yes = el('button', 'btn', 'Reflect'); yes.addEventListener('click', () => { S.settings.reflectDismiss = weekKey(); save(); aiReflect(card); });
-  const no = el('button', 'btn ghost', 'Not now'); no.addEventListener('click', () => { S.settings.reflectDismiss = weekKey(); save(); renderToday(); });
-  acts.appendChild(yes); acts.appendChild(no);
-  card.appendChild(acts);
-  v.appendChild(card);
 }
 function allCompletionDays() {
   const out = [];

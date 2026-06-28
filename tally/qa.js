@@ -248,12 +248,18 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   $('#aiYes').click(); await wait(10);
   JSON.parse(window.localStorage.getItem('tally.v1')).settings.aiEnabled === true ? ok('consent Turn on enables AI') : bad('ai enable', 'false');
   window.setView('stats'); await wait(10);
-  $('#aiBtn') ? ok('Get-a-suggestion button on Stats') : bad('ai button', 'missing');
-  window.fetch = async () => ({ ok: true, json: async () => ({ suggestion: 'Lovely momentum on Read. Try stacking Stretch right after.' }) });
   window.aiSetWorker('https://example.workers.dev');
+  $('#aiBtn') ? ok('Coach-me button on Stats') : bad('coach button', 'missing');
+  $$('#view-stats .insight').length >= 1 ? ok('local multi-week insights show on Stats') : bad('insights', $$('#view-stats .insight').length);
+  window.fetch = async () => ({ ok: true, json: async () => ({ coach: 'Nice win on Read. You lean into mornings. Try one stretch after coffee.' }) });
   $('#aiBtn').click(); await wait(40);
-  ($('#aiOut .ai-card') && /Lovely momentum/.test($('#aiOut').textContent)) ? ok('AI suggestion renders in a card') : bad('ai render', $('#aiOut') && $('#aiOut').textContent);
-  /AI-generated/.test($('#aiOut').textContent) ? ok('every suggestion shows the AI disclosure') : bad('ai disclosure', 'missing');
+  ($('#aiOut .ai-card') && /Nice win on Read/.test($('#aiOut').textContent)) ? ok('coach renders a note in a card') : bad('coach render', $('#aiOut') && $('#aiOut').textContent);
+  /AI-generated/.test($('#aiOut').textContent) ? ok('coach shows the AI disclosure') : bad('ai disclosure', 'missing');
+  window.fetch = async () => ({ ok: true, json: async () => ({ answer: 'You miss Fridays most — try a 2-minute version that day.' }) });
+  $('#aiAsk') ? ok('ask-anything box on Stats') : bad('ask box', 'missing');
+  $('#aiAsk').value = 'why do I miss Fridays?';
+  $('#aiAskBtn').click(); await wait(40);
+  ($('#aiOut .ai-card') && /miss Fridays/.test($('#aiOut').textContent)) ? ok('ask box answers from your data') : bad('ask render', $('#aiOut') && $('#aiOut').textContent);
   window.fetch = async () => ({ ok: true, json: async () => ({ clarified: '10-min walk after lunch, Mon/Wed/Fri' }) });
   $('#fab').click(); await wait(30);
   $('#ef-title').value = 'exercise';
@@ -271,27 +277,18 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   ($('#ef-aiout .ai-card') && /grilled chicken/.test($('#ef-aiout').textContent)) ? ok('assist returns real content (a meal idea)') : bad('assist render', $('#ef-aiout') && $('#ef-aiout').textContent);
   if (window.closeSheet) window.closeSheet();
 
-  // proactive help — multi-question flow (mocked)
+  // markdown cleanup helper still used by coach/editor cards
   (window.aiClean && window.aiClean('**Hi** there') === 'Hi there') ? ok('aiClean strips markdown') : bad('aiClean', window.aiClean && window.aiClean('**Hi** there'));
-  window.fetch = async () => ({ ok: true, json: async () => ({ help: 'Just one stretch right now counts.' }) });
-  const fakeLag = { id: 'pq', title: 'Stretch', type: 'weekly', target: 3, completions: [] };
-  const helpCard = document.createElement('div');
-  if (window.aiHelp) window.aiHelp(fakeLag, helpCard); await wait(10);
-  helpCard.querySelector('.help-chips .chip') ? ok('proactive help asks a question (chips)') : bad('help q1', 'no chips');
-  const b1 = [...helpCard.querySelectorAll('.help-chips .chip')].find(c => /Energy/.test(c.textContent)); if (b1) b1.click(); await wait(10);
-  const t1 = [...helpCard.querySelectorAll('.help-chips .chip')].find(c => /10 minutes/.test(c.textContent)); if (t1) t1.click(); await wait(40);
-  (/AI-generated/.test(helpCard.textContent) && /one stretch/.test(helpCard.textContent)) ? ok('multi-question help renders a tailored tip') : bad('help flow', helpCard.textContent);
+  // automatic AI nudges were removed — confirm Today never shows them
+  window.setView('today'); await wait(10);
+  (!$('#view-today .proactive')) ? ok('no automatic AI cards on Today') : bad('proactive removed', 'still present');
 
   // feedback button
   window.setView('settings'); await wait(10);
   $('#feedbackBtn') ? ok('feedback button present in settings') : bad('feedback btn', 'missing');
 
-  // weekly reflection
-  window.fetch = async () => ({ ok: true, json: async () => ({ reflection: 'You showed up for Read all week — lovely.' }) });
+  // long-term trends (fresh stats render)
   window.setView('stats'); await wait(10);
-  $('#aiReflectBtn') ? ok('Reflect-on-my-week button on Stats') : bad('reflect btn', 'missing');
-  if ($('#aiReflectBtn')) { $('#aiReflectBtn').click(); await wait(40); }
-  ($('#aiOut .ai-card') && /showed up for Read/.test($('#aiOut').textContent) && /reflection/.test($('#aiOut').textContent)) ? ok('weekly reflection renders with disclosure') : bad('reflect render', $('#aiOut') && $('#aiOut').textContent);
 
   // long-term trends
   $$('#view-stats .stat-card').some(c => /Over time/.test(c.textContent)) ? ok('long-term trends card shows') : bad('trends card', 'missing');
