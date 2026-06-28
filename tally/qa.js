@@ -314,6 +314,15 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   window.calCacheSet(window.todayKey(), [{ title: 'Dentist 10am', allDay: false, timeLabel: '10am' }]);
   window.setView('today'); await wait(10);
   ($$('#view-today .cal-event').length >= 1 && /Dentist/.test($('#view-today').textContent)) ? ok('calendar events render read-only in day view') : bad('cal render', $$('#view-today .cal-event').length);
+  // events persist across launches — no 'Load calendar events' tap needed
+  window.calCacheSet(window.todayKey(), [{ title: 'Persisted ev', allDay: true, timeLabel: 'All day' }]);
+  window.gcalCacheSave();
+  const craw = window.localStorage.getItem('tally.gcal.v1');
+  (craw && /Persisted ev/.test(craw)) ? ok('calendar events persist to storage') : bad('cal cache save', craw);
+  window.gcalCacheLoad();
+  window.setView('today'); await wait(10);
+  (/Persisted ev/.test($('#view-today').textContent)) ? ok('cached calendar events show on launch (no button)') : bad('cal cache render', 'missing');
+  !$$('#view-today button').some(b => /Load calendar events/.test(b.textContent)) ? ok('no Load-calendar button when events cached') : bad('cal button hidden', 'still shown');
   window.calTestConnect(false); window.setView('today'); await wait(10);
   !$$('#view-today .cal-event').length ? ok('calendar section hides when disconnected') : bad('cal hide', 'still shown');
 

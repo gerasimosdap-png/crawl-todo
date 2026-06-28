@@ -980,10 +980,10 @@ function renderToday() {
 function renderDayCalendar(v, key) {
   if (!S.settings.gcalConnected || S.settings.gcalShow === false) return;
   if (gcalEventsByDay[key] === undefined) {
-    if (gcalToken && Date.now() < gcalTokenExp) { gcalFetchDay(key); return; }
+    if (!gcalNeedsAuth) { gcalFetchDay(key); return; }
     v.appendChild(el('div', 'section-title', 'From your calendar'));
     const lb = el('button', 'btn ghost', 'Load calendar events'); lb.style.marginBottom = '10px';
-    lb.addEventListener('click', () => { gcalFetchDay(key); });
+    lb.addEventListener('click', () => { gcalFetchDay(key, true); });
     v.appendChild(lb);
     return;
   }
@@ -1575,6 +1575,7 @@ function init() {
   $('#sheet').addEventListener('click', (e) => { if (e.target.id === 'sheet') closeSheet(); });
   $('#infoPop').addEventListener('click', (e) => { if (e.target.id === 'infoPop') closeInfo(); });
   $('#celebrate').addEventListener('click', (e) => { if (e.target.id === 'celebrate') closeCelebrate(); });
+  if (S.settings.gcalConnected) gcalCacheLoad();
   renderHeader();
   setView('today');
   scheduleReminders();
@@ -1589,8 +1590,24 @@ document.addEventListener('DOMContentLoaded', init);
 /* ---------------- Google Calendar (read-only, optional) ---------------- */
 const DEFAULT_GCAL_CLIENT_ID = '136485291900-vib1opnsm8fjlakuk87b4dn3asqsoj58.apps.googleusercontent.com';
 let gcalToken = null, gcalTokenExp = 0, gcalTokenClient = null;
+let gcalNeedsAuth = false;
+const GCAL_CACHE_KEY = 'tally.gcal.v1';
 let gcalEventsByDay = {};
 function calCacheSet(key, evs) { gcalEventsByDay[key] = evs; }
+function gcalCacheLoad() {
+  try { const o = JSON.parse(localStorage.getItem(GCAL_CACHE_KEY) || '{}'); if (o && o.days) gcalEventsByDay = o.days; } catch (e) {}
+}
+function gcalCacheSave() {
+  try {
+    const t0 = new Date(todayKey() + 'T12:00:00').getTime();
+    const days = {};
+    Object.keys(gcalEventsByDay).forEach(k => {
+      const dt = new Date(k + 'T12:00:00').getTime();
+      if (!isNaN(dt) && Math.abs(dt - t0) <= 31 * 86400000) days[k] = gcalEventsByDay[k];
+    });
+    localStorage.setItem(GCAL_CACHE_KEY, JSON.stringify({ days, ts: Date.now() }));
+  } catch (e) {}
+}
 function loadGIS() {
   return new Promise((resolve, reject) => {
     if (window.google && window.google.accounts && window.google.accounts.oauth2) return resolve();
@@ -1613,7 +1630,7 @@ async function gcalConnect() {
     gcalTokenClient.callback = (resp) => {
       if (resp && resp.access_token) {
         gcalToken = resp.access_token; gcalTokenExp = Date.now() + (resp.expires_in ? resp.expires_in * 1000 : 3500000);
-        S.settings.gcalConnected = true; save(); gcalEventsByDay = {};
+        S.settings.gcalConnected = true; gcalNeedsAuth = false; save(); gcalEventsByDay = {};
         toast('Google Calendar connected.');
         if (currentView === 'settings') renderSettings();
         gcalFetchDay(activeDayKey());
@@ -1629,21 +1646,26 @@ function gcalDisconnect() {
   toast('Calendar disconnected.');
 }
 async function gcalInitSilent() {
-  // Only prepare the client. Never request a token on launch — that pops the Google chooser in an installed PWA.
-  try { await gcalInitClient(); } catch (e) {}
+  // Cached events already render instantly; here we refresh silently in the background.
+  try { await gcalInitClient(); } catch (e) { return; }
+  gcalFetchDay(activeDayKey()); // prompt:'' — silent if the Google session allows, otherwise keeps the cache
 }
 function gcalEnsureToken() {
   return new Promise((resolve) => {
     if (gcalToken && Date.now() < gcalTokenExp) return resolve(gcalToken);
     if (!gcalTokenClient) return resolve(null);
     gcalTokenClient.callback = (resp) => { if (resp && resp.access_token) { gcalToken = resp.access_token; gcalTokenExp = Date.now() + 3500000; resolve(gcalToken); } else resolve(null); };
+    gcalTokenClient.error_callback = () => resolve(null);
     try { gcalTokenClient.requestAccessToken({ prompt: '' }); } catch (e) { resolve(null); }
   });
 }
 async function gcalFetchDay(key) {
   if (!S.settings.gcalConnected) return;
+  const wasUndef = gcalEventsByDay[key] === undefined;
   gcalEventsByDay[key] = gcalEventsByDay[key] || [];
-  const tok = await gcalEnsureToken(); if (!tok) return;
+  const tok = await gcalEnsureToken();
+  if (!tok) { gcalNeedsAuth = true; if (wasUndef) delete gcalEventsByDay[key]; if (currentView === 'today') renderToday(); return; }
+  gcalNeedsAuth = false;
   const start = new Date(key + 'T00:00:00'); const end = new Date(key + 'T00:00:00'); end.setDate(end.getDate() + 1);
   const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=' + encodeURIComponent(start.toISOString()) + '&timeMax=' + encodeURIComponent(end.toISOString());
   try {
@@ -1655,6 +1677,7 @@ async function gcalFetchDay(key) {
       const sd = it.start ? new Date(it.start.dateTime || (it.start.date + 'T00:00:00')) : null;
       return { title: it.summary || '(busy)', allDay, timeLabel: allDay ? 'All day' : fmtClock(sd) };
     });
+    gcalCacheSave();
     if (currentView === 'today') renderToday();
   } catch (e) {}
 }
