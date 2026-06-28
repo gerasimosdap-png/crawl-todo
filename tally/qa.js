@@ -255,6 +255,7 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   $('#aiBtn').click(); await wait(40);
   ($('#aiOut .ai-card') && /Nice win on Read/.test($('#aiOut').textContent)) ? ok('coach renders a note in a card') : bad('coach render', $('#aiOut') && $('#aiOut').textContent);
   /AI-generated/.test($('#aiOut').textContent) ? ok('coach shows the AI disclosure') : bad('ai disclosure', 'missing');
+  window.localStorage.getItem('tally.coach.v1') ? ok('coach result is cached for the week') : bad('coach cache', 'missing');
   window.fetch = async () => ({ ok: true, json: async () => ({ answer: 'You miss Fridays most — try a 2-minute version that day.' }) });
   $('#aiAsk') ? ok('ask-anything box on Stats') : bad('ask box', 'missing');
   $('#aiAsk').value = 'why do I miss Fridays?';

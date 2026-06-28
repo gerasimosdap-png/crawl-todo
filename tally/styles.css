@@ -457,3 +457,5 @@ body {
 .ask-input:focus { outline: none; border-color: var(--accent); }
 .ask-wrap .btn { flex: none; }
 .ai-q { font-size: .82rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+
+.ai-refresh { color: var(--accent-ink); text-decoration: underline; cursor: pointer; }

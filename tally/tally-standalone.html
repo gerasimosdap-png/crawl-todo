@@ -473,6 +473,8 @@ body {
 .ask-wrap .btn { flex: none; }
 .ai-q { font-size: .82rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
 
+.ai-refresh { color: var(--accent-ink); text-decoration: underline; cursor: pointer; }
+
 </style>
 </head>
 <body>
@@ -1882,17 +1884,34 @@ function openAIConsent() {
   $('#aiYes').addEventListener('click', () => { S.settings.aiEnabled = true; save(); closeCelebrate(); renderSettings(); });
   $('#aiNo').addEventListener('click', () => { closeCelebrate(); renderSettings(); });
 }
-async function aiCoach(out, insights) {
+const COACH_KEY = 'tally.coach.v1';
+function coachSig() {
+  const p = aiPayload();
+  return p.weekPct + '|' + p.streak + '|' + p.tasks.map(t => t.title + ':' + t.progress).join(',') + '|' + computeInsights().join('|');
+}
+function coachCacheGet() { try { return JSON.parse(localStorage.getItem(COACH_KEY) || 'null'); } catch (e) { return null; } }
+function renderCoachCard(out, text, cached) {
+  out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a coach, not gospel' + (cached ? ' · <a href="#" class="ai-refresh">refresh</a>' : '') + '</div></div>';
+  out.querySelector('.ai-text').textContent = text;
+  const rf = out.querySelector('.ai-refresh');
+  if (rf) rf.addEventListener('click', (e) => { e.preventDefault(); aiCoach(out, computeInsights(), true); });
+}
+async function aiCoach(out, insights, force) {
   if (!out) return;
+  const sig = coachSig();
+  const cache = coachCacheGet();
+  if (!force && cache && cache.sig === sig && cache.text) { renderCoachCard(out, cache.text, true); return; }
   if (!AI_WORKER_URL) { out.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
   out.innerHTML = '<div class="ai-loading">Reading your week…</div>';
+  const lastTip = (cache && cache.text) ? cache.text : '';
   try {
-    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ mode: 'coach', insights: (insights || []).join(' ') }, aiPayload())) });
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ mode: 'coach', insights: (insights || []).join(' '), lastTip: lastTip }, aiPayload())) });
     const data = await res.json();
     const text = data && (data.coach || data.suggestion);
     if (res.ok && text) {
-      out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a coach, not gospel</div></div>';
-      out.querySelector('.ai-text').textContent = aiClean(text);
+      const clean = aiClean(text);
+      try { localStorage.setItem(COACH_KEY, JSON.stringify({ sig: sig, text: clean })); } catch (e) {}
+      renderCoachCard(out, clean, false);
     } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reach your coach right now — try again in a moment.</div>'; }
   } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reach your coach right now — try again in a moment.</div>'; }
 }
@@ -1921,6 +1940,20 @@ function completionsByWeekday(weeks) {
   allCompletionDays().forEach(d => { if (d >= ck) counts[(new Date(d + 'T12:00:00').getDay() + 6) % 7]++; });
   return counts;
 }
+function weekendDropoff() {
+  const cutoff = mondayOf(new Date()); cutoff.setDate(cutoff.getDate() - 7 * 8);
+  const ck = dateKey(cutoff);
+  let wk = 0, we = 0;
+  allCompletionDays().forEach(d => {
+    if (d < ck) return;
+    const dow = (new Date(d + 'T12:00:00').getDay() + 6) % 7;
+    if (dow >= 5) we++; else wk++;
+  });
+  if (wk + we < 8) return null;
+  const wkPer = wk / 5, wePer = we / 2;
+  if (wePer < wkPer * 0.55) return '📉 Completions dip on weekends — lighter Sat/Sun goals may help.';
+  return null;
+}
 function computeInsights() {
   const out = [];
   if (allCompletionDays().length < 3) return out;
@@ -1930,6 +1963,8 @@ function computeInsights() {
   const wts = weeklyTotals(2);
   const last = wts[0].count, now = wts[1].count;
   if (last || now) out.push(now > last ? '📈 You’re ahead of last week (' + now + ' vs ' + last + ').' : now < last ? '🌱 A little behind last week (' + now + ' vs ' + last + ') — easy to close.' : '⚖️ Holding steady with last week (' + now + ').');
+  const cs = currentStreak();
+  if (cs >= 3 && cs === longestStreak()) out.push('🏆 ' + cs + ' days — your longest streak yet!');
   const active = S.tasks.filter(t => !t.archived && (t.type === 'weekly' || t.type === 'daily' || t.type === 'weekdays'));
   let best = null, bestRatio = -1;
   active.forEach(t => {
@@ -1937,7 +1972,9 @@ function computeInsights() {
     if (ratio > bestRatio) { bestRatio = ratio; best = t; }
   });
   if (best && bestRatio > 0) out.push('🔥 Most consistent this week: ' + best.title + '.');
-  return out;
+  const wek = weekendDropoff();
+  if (wek) out.push(wek);
+  return out.slice(0, 4);
 }
 
 async function aiClarify() {
