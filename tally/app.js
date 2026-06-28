@@ -435,10 +435,10 @@ function renderToday() {
 function renderDayCalendar(v, key) {
   if (!S.settings.gcalConnected || S.settings.gcalShow === false) return;
   if (gcalEventsByDay[key] === undefined) {
-    if (!gcalNeedsAuth) { gcalFetchDay(key); return; }
+    if (gcalToken && Date.now() < gcalTokenExp) { gcalFetchDay(key); return; }
     v.appendChild(el('div', 'section-title', 'From your calendar'));
     const lb = el('button', 'btn ghost', 'Load calendar events'); lb.style.marginBottom = '10px';
-    lb.addEventListener('click', () => { gcalFetchDay(key, true); });
+    lb.addEventListener('click', () => { gcalRefresh(true); });
     v.appendChild(lb);
     return;
   }
@@ -1088,7 +1088,7 @@ async function gcalConnect() {
         S.settings.gcalConnected = true; gcalNeedsAuth = false; save(); gcalEventsByDay = {};
         toast('Google Calendar connected.');
         if (currentView === 'settings') renderSettings();
-        gcalFetchDay(activeDayKey());
+        gcalRefresh();
       }
     };
     gcalTokenClient.requestAccessToken({ prompt: 'consent' });
@@ -1101,9 +1101,10 @@ function gcalDisconnect() {
   toast('Calendar disconnected.');
 }
 async function gcalInitSilent() {
-  // Cached events already render instantly; here we refresh silently in the background.
-  try { await gcalInitClient(); } catch (e) { return; }
-  gcalFetchDay(activeDayKey()); // prompt:'' — silent if the Google session allows, otherwise keeps the cache
+  // Cached events render instantly on launch. We NEVER request a token here —
+  // in an installed PWA that pops the Google prompt every open. Fresh data is fetched
+  // on an explicit tap, or when a token is already live in this session.
+  try { await gcalInitClient(); } catch (e) {}
 }
 function gcalEnsureToken() {
   return new Promise((resolve) => {
@@ -1113,6 +1114,34 @@ function gcalEnsureToken() {
     gcalTokenClient.error_callback = () => resolve(null);
     try { gcalTokenClient.requestAccessToken({ prompt: '' }); } catch (e) { resolve(null); }
   });
+}
+async function gcalRefresh() {
+  if (!S.settings.gcalConnected) return;
+  const tok = await gcalEnsureToken();
+  if (!tok) { gcalNeedsAuth = true; if (currentView === 'today') renderToday(); return; }
+  gcalNeedsAuth = false;
+  const base = new Date(); base.setHours(0, 0, 0, 0);
+  const start = new Date(base); start.setDate(start.getDate() - 1);
+  const end = new Date(base); end.setDate(end.getDate() + 14);
+  const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=' + encodeURIComponent(start.toISOString()) + '&timeMax=' + encodeURIComponent(end.toISOString());
+  try {
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + tok } });
+    if (!r.ok) return;
+    const data = await r.json();
+    const byDay = {};
+    (data.items || []).forEach(it => {
+      const allDay = !!(it.start && it.start.date);
+      const sd = it.start ? new Date(it.start.dateTime || (it.start.date + 'T00:00:00')) : null;
+      const dk = (it.start && it.start.date) ? it.start.date : (sd ? dateKey(sd) : null);
+      if (!dk) return;
+      (byDay[dk] = byDay[dk] || []).push({ title: it.summary || '(busy)', allDay, timeLabel: allDay ? 'All day' : fmtClock(sd) });
+    });
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      const k = dateKey(d); gcalEventsByDay[k] = byDay[k] || [];
+    }
+    gcalCacheSave();
+    if (currentView === 'today') renderToday();
+  } catch (e) {}
 }
 async function gcalFetchDay(key) {
   if (!S.settings.gcalConnected) return;
