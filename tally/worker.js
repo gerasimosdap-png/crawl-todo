@@ -1,6 +1,6 @@
 /* ============================================================
    Tally AI — Cloudflare Worker (Gemini proxy)
-   modes: clarify, assist, stack, coach, ask   (default: coach)
+   modes: clarify(+anchors), assist, coach, ask   (default: coach)
    per-mode output budgets keep small calls cheap + fast.
    ============================================================ */
 
@@ -22,7 +22,7 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400, cors); }
 
-    const mode = ['clarify', 'assist', 'stack', 'coach', 'ask'].includes(body.mode) ? body.mode : 'coach';
+    const mode = ['clarify', 'assist', 'coach', 'ask'].includes(body.mode) ? body.mode : 'coach';
 
     const tasks = Array.isArray(body.tasks) ? body.tasks.slice(0, 40) : [];
     const weekPct = Number.isFinite(body.weekPct) ? body.weekPct : 0;
@@ -38,20 +38,16 @@ export default {
     if (mode === 'clarify') {
       const title = String(body.title || '').slice(0, 120);
       if (!title) return json({ error: 'no title' }, 400, cors);
+      const anchors = Array.isArray(body.anchors) ? body.anchors.slice(0, 10).map(a => String(a).slice(0, 60)) : [];
       prompt =
-`Rewrite this personal task into a clearer, more doable version with a simple implementation intention (what, and when or where), under 12 words. Keep the person's intent and tone. Reply with ONLY the rewritten task — no quotes, no preamble, no options.
-Task: ${title}`;
+`Rewrite this personal task into a clearer, more doable version with a simple implementation intention (what, and when or where), under 12 words. If one of the user's existing habits is a natural anchor, phrase it as a habit stack ("After [existing habit], [task]"); otherwise use a simple time-or-place cue. Keep the person's intent and tone. Reply with ONLY the rewritten task — no quotes, no preamble, no options.
+Task: ${title}
+Existing habits: ${anchors.join(', ') || '(none)'}`;
     } else if (mode === 'assist') {
       const title = String(body.title || '').slice(0, 120);
       if (!title) return json({ error: 'no title' }, 400, cors);
       prompt =
 `The user has this task to do: "${title}". Actually help them do it — give a concrete, ready-to-use answer. For "plan a healthy meal" suggest one specific balanced meal; for a workout suggest a short routine; for "study X" a quick 10-minute plan; for an errand a brief checklist. Under 70 words, friendly and practical. Keep any food or exercise tips general and gentle — no medical, calorie, weight-loss, or clinical advice.`;
-    } else if (mode === 'stack') {
-      const title = String(body.title || '').slice(0, 120);
-      if (!title) return json({ error: 'no title' }, 400, cors);
-      const anchors = Array.isArray(body.anchors) ? body.anchors.slice(0, 10).map(a => String(a).slice(0, 60)) : [];
-      prompt =
-`The user wants to build this habit: "${title}". Habits they already do regularly: ${anchors.join(', ') || '(none given)'}. Suggest ONE habit stack in the form "After [an existing habit], I will [the new habit]." Pick the most natural existing anchor; if none fit, suggest a simple time-or-place cue instead. Under 20 words. Reply with only the one sentence.`;
     } else if (mode === 'ask') {
       prompt =
 `The user is asking about their own habit-tracker data. Answer their question directly and warmly in under 80 words, grounded in the numbers below. If the data can't answer it, say so kindly and offer your best general tip. No medical, diet, or clinical advice. No preamble.
@@ -74,7 +70,7 @@ Warm, plain language, no guilt, no bulleted advice, no medical or diet advice. N
     const key = env.GEMINI_API_KEY;
     if (!key) return json({ error: 'no key configured' }, 500, cors);
 
-    const maxTokens = { clarify: 60, stack: 70, assist: 256, coach: 256, ask: 288 }[mode] || 256;
+    const maxTokens = { clarify: 80, assist: 256, coach: 256, ask: 288 }[mode] || 256;
 
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + key;
     let g;
@@ -97,7 +93,7 @@ Warm, plain language, no guilt, no bulleted advice, no medical or diet advice. N
     try { text = data.candidates[0].content.parts[0].text.trim(); } catch (e) {}
     if (!text) return json({ error: 'empty' }, 502, cors);
 
-    const keyName = { clarify: 'clarified', assist: 'assist', stack: 'stack', ask: 'answer' }[mode] || 'coach';
+    const keyName = { clarify: 'clarified', assist: 'assist', ask: 'answer' }[mode] || 'coach';
     return json({ [keyName]: text }, 200, cors);
   },
 };

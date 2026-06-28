@@ -475,6 +475,8 @@ body {
 
 .ai-refresh { color: var(--accent-ink); text-decoration: underline; cursor: pointer; }
 
+.ai-hint { font-size: .72rem; color: var(--muted); margin-top: 7px; line-height: 1.4; }
+
 </style>
 </head>
 <body>
@@ -1340,10 +1342,11 @@ function openEditor(id) {
   fTitle.innerHTML = '<label>What is it?</label><input type="text" id="ef-title" placeholder="e.g. Stretch, Read, Drink water" />';
   if (S.settings.aiEnabled) {
     const aiRow = el('div', 'ai-row');
-    const cl = el('button', 'btn ghost', '✨ Sharpen'); cl.id = 'ef-clarify'; cl.type = 'button'; cl.addEventListener('click', aiClarify);
+    const cl = el('button', 'btn ghost', '✨ Refine'); cl.id = 'ef-refine'; cl.type = 'button'; cl.addEventListener('click', aiRefine);
     const as = el('button', 'btn ghost', '💡 Idea'); as.id = 'ef-assist'; as.type = 'button'; as.addEventListener('click', aiAssist);
-    const sk = el('button', 'btn ghost', '🔗 Cue'); sk.id = 'ef-stack'; sk.type = 'button'; sk.addEventListener('click', aiStack);
-    aiRow.appendChild(cl); aiRow.appendChild(as); aiRow.appendChild(sk); fTitle.appendChild(aiRow);
+    aiRow.appendChild(cl); aiRow.appendChild(as); fTitle.appendChild(aiRow);
+    const aiHint = el('div', 'ai-hint', 'Refine rewrites your task clearer with a when/where cue · Idea suggests what to actually do');
+    fTitle.appendChild(aiHint);
     const aout = el('div'); aout.id = 'ef-aiout'; aout.style.marginTop = '8px'; fTitle.appendChild(aout);
   }
   body.appendChild(fTitle);
@@ -1977,20 +1980,21 @@ function computeInsights() {
   return out.slice(0, 4);
 }
 
-async function aiClarify() {
+async function aiRefine() {
   const titleEl = $('#ef-title'); if (!titleEl) return;
   const t = (titleEl.value || '').trim();
   if (!t) { titleEl.focus(); return; }
   if (!AI_WORKER_URL) { toast('Smart suggestions aren’t set up yet.'); return; }
-  const btn = $('#ef-clarify'); const label = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Sharpening…'; }
+  const btn = $('#ef-refine'); const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Refining…'; }
+  const anchors = S.tasks.filter(x => !x.archived && (x.type === 'daily' || x.type === 'weekdays')).map(x => x.title).slice(0, 10);
   try {
-    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'clarify', title: t }) });
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'clarify', title: t, anchors: anchors }) });
     const data = await res.json();
     const c = data && (data.clarified || data.suggestion);
-    if (res.ok && c) { titleEl.value = c; if (draft) draft.title = c; toast('✨ Sharpened — tweak it however you like'); }
-    else toast('Couldn’t sharpen right now — try again.');
-  } catch (e) { toast('Couldn’t sharpen right now — try again.'); }
+    if (res.ok && c) { titleEl.value = c; if (draft) draft.title = c; toast('✨ Refined — tweak it however you like'); }
+    else toast('Couldn’t refine right now — try again.');
+  } catch (e) { toast('Couldn’t refine right now — try again.'); }
   if (btn) { btn.disabled = false; btn.textContent = label; }
 }
 
@@ -2036,24 +2040,7 @@ async function aiAssist() {
   } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn\u2019t get an idea right now \u2014 try again.</div>'; }
 }
 
-/* ---------------- Weekly reflection + habit-stacking + trends ---------------- */
-async function aiStack() {
-  const titleEl = $('#ef-title'); const out = $('#ef-aiout'); if (!titleEl || !out) return;
-  const t = (titleEl.value || '').trim();
-  if (!t) { titleEl.focus(); return; }
-  if (!AI_WORKER_URL) { toast('Smart suggestions aren’t set up yet.'); return; }
-  out.innerHTML = '<div class="ai-loading">Thinking…</div>';
-  const anchors = S.tasks.filter(x => !x.archived && x.type === 'daily').map(x => x.title).slice(0, 10);
-  try {
-    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'stack', title: t, anchors }) });
-    const data = await res.json();
-    const text = data && (data.stack || data.suggestion);
-    if (res.ok && text) {
-      out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a suggestion, not gospel</div></div>';
-      out.querySelector('.ai-text').textContent = aiClean(text);
-    } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t suggest a cue right now.</div>'; }
-  } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t suggest a cue right now.</div>'; }
-}
+/* ---------------- Long-term trends ---------------- */
 function allCompletionDays() {
   const out = [];
   S.tasks.forEach(t => (t.completions || []).forEach(ts => out.push(dateKey(new Date(ts)))));

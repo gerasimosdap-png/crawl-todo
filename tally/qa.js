@@ -264,9 +264,10 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   window.fetch = async () => ({ ok: true, json: async () => ({ clarified: '10-min walk after lunch, Mon/Wed/Fri' }) });
   $('#fab').click(); await wait(30);
   $('#ef-title').value = 'exercise';
-  $('#ef-clarify') ? ok('Sharpen-with-AI button shows in editor when AI on') : bad('clarify button', 'missing');
-  if ($('#ef-clarify')) { $('#ef-clarify').click(); await wait(40); }
-  (/walk after lunch/.test($('#ef-title').value)) ? ok('clarifier rewrites the task title') : bad('clarify result', $('#ef-title').value);
+  $('#ef-refine') ? ok('Refine button shows in editor when AI on') : bad('refine button', 'missing');
+  if ($('#ef-refine')) { $('#ef-refine').click(); await wait(40); }
+  (/walk after lunch/.test($('#ef-title').value)) ? ok('Refine rewrites the task title') : bad('refine result', $('#ef-title').value);
+  $('.ai-hint') ? ok('editor explains Refine vs Idea') : bad('ai hint', 'missing');
   if (window.closeSheet) window.closeSheet();
 
   // assist: Get-an-idea returns real content
@@ -295,13 +296,9 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   $$('#view-stats .stat-card').some(c => /Over time/.test(c.textContent)) ? ok('long-term trends card shows') : bad('trends card', 'missing');
   /all-time/.test($('#view-stats').textContent) ? ok('all-time total + longest streak shown') : bad('trends nums', 'missing');
 
-  // habit-stacking (Cue)
-  window.fetch = async () => ({ ok: true, json: async () => ({ stack: 'After your morning coffee, read one page.' }) });
+  // editor AI merged to two: Refine + Idea (Cue folded into Refine)
   $('#fab').click(); await wait(30);
-  $('#ef-title').value = 'Read a chapter';
-  $('#ef-stack') ? ok('habit-stacking Cue button in editor') : bad('stack button', 'missing');
-  if ($('#ef-stack')) { $('#ef-stack').click(); await wait(40); }
-  ($('#ef-aiout .ai-card') && /morning coffee/.test($('#ef-aiout').textContent)) ? ok('habit-stacking suggests a cue') : bad('stack render', $('#ef-aiout') && $('#ef-aiout').textContent);
+  ($('#ef-refine') && $('#ef-assist') && !$('#ef-stack')) ? ok('editor shows two AI buttons, no separate Cue') : bad('editor ai merge', 'stack present or buttons missing');
   if (window.closeSheet) window.closeSheet();
 
   // ---- Google Calendar (read-only) ----
