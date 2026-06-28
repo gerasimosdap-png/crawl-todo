@@ -1244,6 +1244,7 @@ function loadFirebase() {
     next();
   });
 }
+let fbJustSignedIn = false;
 async function fbInit() {
   if (fbReady) return;
   await loadFirebase();
@@ -1261,6 +1262,7 @@ async function fbSignIn() {
   try {
     await fbInit();
     if (location.protocol === 'file:') { toast('Sync needs Tally opened from its web address, not a local file.'); return; }
+    fbJustSignedIn = true;
     await fbAuth.signInWithPopup(new window.firebase.auth.GoogleAuthProvider());
   } catch (e) {
     if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request')) {
@@ -1287,7 +1289,7 @@ async function fbStartSync() {
       const d = s.data();
       if (d && d.updatedAt && d.updatedAt > (S.updatedAt || 0)) adoptRemote(d);
     });
-    toast('Synced. Your tasks now travel with you.');
+    if (fbJustSignedIn) { toast('Synced. Your tasks now travel with you.'); fbJustSignedIn = false; }
   } catch (e) {}
 }
 function fbStopSync() { if (fbUnsub) { fbUnsub(); fbUnsub = null; } }
