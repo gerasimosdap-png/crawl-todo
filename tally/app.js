@@ -163,7 +163,7 @@ function defaultState() {
   return {
     version: 1,
     tasks: [],
-    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '', syncEnabled: false, aiEnabled: false, proactiveDismiss: '' },
+    settings: { theme: 'sage', notify: false, reminderTime: '20:00', name: '', lastNotifyDay: '', gcalConnected: false, gcalShow: true, gcalClientId: '', celebratedWeek: '', syncEnabled: false, aiEnabled: false, proactiveDismiss: '', reflectDismiss: '' },
     onboarded: false,
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -407,7 +407,7 @@ function renderToday() {
     banner.appendChild(back);
     v.appendChild(banner);
   }
-  if (day.isToday) renderProactive(v);
+  if (day.isToday) { renderProactive(v); renderReflectNudge(v); }
 
   const sched = S.tasks.filter(t => scheduledOnDate(t, d));
   if (sched.length === 0) {
@@ -572,6 +572,8 @@ function renderStats() {
     const ab = el('button', 'btn block', '✨ Get a suggestion'); ab.id = 'aiBtn';
     ab.addEventListener('click', aiSuggest);
     ac.appendChild(ab);
+    const rb = el('button', 'btn ghost block', '📝 Reflect on my week'); rb.id = 'aiReflectBtn'; rb.style.marginTop = '8px'; rb.addEventListener('click', () => aiReflect(aout));
+    ac.appendChild(rb);
     const aout = el('div', null); aout.id = 'aiOut'; aout.style.marginTop = '12px';
     ac.appendChild(aout);
     v.appendChild(ac);
@@ -624,6 +626,7 @@ function renderStats() {
     });
     v.appendChild(pc);
   }
+  renderTrends(v);
 }
 function numCard(n, label) { const c = el('div', 'stat-card'); c.innerHTML = '<div class="bignum">' + n + '</div><div class="biglbl">' + label + '</div>'; return c; }
 function daysDoneThisWeek(t) { return weekDates().filter(d => compsOn(t, dateKey(d)) > 0).length; }
@@ -778,8 +781,9 @@ function openEditor(id) {
   if (S.settings.aiEnabled) {
     const aiRow = el('div', 'ai-row');
     const cl = el('button', 'btn ghost', '✨ Sharpen'); cl.id = 'ef-clarify'; cl.type = 'button'; cl.addEventListener('click', aiClarify);
-    const as = el('button', 'btn ghost', '💡 Get an idea'); as.id = 'ef-assist'; as.type = 'button'; as.addEventListener('click', aiAssist);
-    aiRow.appendChild(cl); aiRow.appendChild(as); fTitle.appendChild(aiRow);
+    const as = el('button', 'btn ghost', '💡 Idea'); as.id = 'ef-assist'; as.type = 'button'; as.addEventListener('click', aiAssist);
+    const sk = el('button', 'btn ghost', '🔗 Cue'); sk.id = 'ef-stack'; sk.type = 'button'; sk.addEventListener('click', aiStack);
+    aiRow.appendChild(cl); aiRow.appendChild(as); aiRow.appendChild(sk); fTitle.appendChild(aiRow);
     const aout = el('div'); aout.id = 'ef-aiout'; aout.style.marginTop = '8px'; fTitle.appendChild(aout);
   }
   body.appendChild(fTitle);
@@ -1410,6 +1414,106 @@ async function aiAssist() {
       out.querySelector('.ai-text').textContent = aiClean(text);
     } else { out.innerHTML = '<div class="about" style="padding:0">Couldn\u2019t get an idea right now \u2014 try again.</div>'; }
   } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn\u2019t get an idea right now \u2014 try again.</div>'; }
+}
+
+/* ---------------- Weekly reflection + habit-stacking + trends ---------------- */
+async function aiReflect(out) {
+  if (!out) return;
+  if (!AI_WORKER_URL) { out.innerHTML = '<div class="about" style="padding:0">Smart suggestions aren’t set up yet.</div>'; return; }
+  out.innerHTML = '<div class="ai-loading">Reflecting…</div>';
+  try {
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ mode: 'reflect' }, aiPayload())) });
+    const data = await res.json();
+    const text = data && (data.reflection || data.suggestion);
+    if (res.ok && text) {
+      out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a reflection, not gospel</div></div>';
+      out.querySelector('.ai-text').textContent = aiClean(text);
+    } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reflect right now — try again later.</div>'; }
+  } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t reflect right now — try again later.</div>'; }
+}
+async function aiStack() {
+  const titleEl = $('#ef-title'); const out = $('#ef-aiout'); if (!titleEl || !out) return;
+  const t = (titleEl.value || '').trim();
+  if (!t) { titleEl.focus(); return; }
+  if (!AI_WORKER_URL) { toast('Smart suggestions aren’t set up yet.'); return; }
+  out.innerHTML = '<div class="ai-loading">Thinking…</div>';
+  const anchors = S.tasks.filter(x => !x.archived && x.type === 'daily').map(x => x.title).slice(0, 10);
+  try {
+    const res = await fetch(AI_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'stack', title: t, anchors }) });
+    const data = await res.json();
+    const text = data && (data.stack || data.suggestion);
+    if (res.ok && text) {
+      out.innerHTML = '<div class="ai-card"><div class="ai-text"></div><div class="ai-badge">✨ AI-generated — a suggestion, not gospel</div></div>';
+      out.querySelector('.ai-text').textContent = aiClean(text);
+    } else { out.innerHTML = '<div class="about" style="padding:0">Couldn’t suggest a cue right now.</div>'; }
+  } catch (e) { out.innerHTML = '<div class="about" style="padding:0">Couldn’t suggest a cue right now.</div>'; }
+}
+function renderReflectNudge(v) {
+  if (!S.settings.aiEnabled) return;
+  if (dowMon(new Date()) !== 6) return;
+  if (S.settings.reflectDismiss === weekKey()) return;
+  const card = el('div', 'proactive');
+  card.innerHTML = '<div class="pro-row"><span class="pro-ico">📝</span><div class="pro-text">It’s Sunday — want to reflect on your week?</div></div>';
+  const acts = el('div', 'pro-acts');
+  const yes = el('button', 'btn', 'Reflect'); yes.addEventListener('click', () => { S.settings.reflectDismiss = weekKey(); save(); aiReflect(card); });
+  const no = el('button', 'btn ghost', 'Not now'); no.addEventListener('click', () => { S.settings.reflectDismiss = weekKey(); save(); renderToday(); });
+  acts.appendChild(yes); acts.appendChild(no);
+  card.appendChild(acts);
+  v.appendChild(card);
+}
+function allCompletionDays() {
+  const out = [];
+  S.tasks.forEach(t => (t.completions || []).forEach(ts => out.push(dateKey(new Date(ts)))));
+  return out;
+}
+function longestStreak() {
+  const days = [...new Set(allCompletionDays())].sort();
+  if (!days.length) return 0;
+  let best = 1, run = 1;
+  for (let i = 1; i < days.length; i++) {
+    const prev = new Date(days[i - 1] + 'T12:00:00'), cur = new Date(days[i] + 'T12:00:00');
+    const diff = Math.round((cur - prev) / 86400000);
+    run = diff === 1 ? run + 1 : 1;
+    if (run > best) best = run;
+  }
+  return best;
+}
+function weeklyTotals(num) {
+  const all = allCompletionDays();
+  const thisMon = mondayOf(new Date());
+  const out = [];
+  for (let w = num - 1; w >= 0; w--) {
+    const start = new Date(thisMon); start.setDate(thisMon.getDate() - w * 7);
+    const end = new Date(start); end.setDate(start.getDate() + 7);
+    const sk = dateKey(start), ek = dateKey(end);
+    const count = all.filter(d => d >= sk && d < ek).length;
+    out.push({ count, label: w === 0 ? 'now' : String(start.getDate()) });
+  }
+  return out;
+}
+function renderTrends(v) {
+  const total = allCompletionDays().length;
+  if (!total) return;
+  const wts = weeklyTotals(8);
+  const card = el('div', 'stat-card');
+  card.innerHTML = '<h3>Over time</h3><p class="hint">Tasks completed each week — last 8 weeks</p>';
+  const mx = Math.max(1, ...wts.map(w => w.count));
+  const bars = el('div', 'wbars');
+  wts.forEach(w => {
+    const col = el('div', 'wbar-col');
+    col.appendChild(el('div', 'wbar-val', w.count || ''));
+    const bar = el('div', 'wbar' + (w.count ? '' : ' empty'));
+    bar.style.height = (w.count ? Math.max(8, (w.count / mx) * 96) : 4) + 'px';
+    col.appendChild(bar);
+    col.appendChild(el('div', 'wbar-lbl', w.label));
+    bars.appendChild(col);
+  });
+  card.appendChild(bars);
+  v.appendChild(card);
+  const row = el('div', 'bigrow');
+  row.appendChild(numCard(total, 'done all-time'));
+  row.appendChild(numCard(longestStreak(), 'longest streak'));
+  v.appendChild(row);
 }
 
 if ('serviceWorker' in navigator) {

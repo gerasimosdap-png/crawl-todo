@@ -445,3 +445,6 @@ body {
 .help-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .help-chips .chip { font-size: .85rem; }
 .ai-text { white-space: pre-wrap; }
+
+.ai-row { flex-wrap: wrap; }
+.ai-row .btn { flex: 1 1 30%; }

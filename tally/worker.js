@@ -1,13 +1,6 @@
 /* ============================================================
    Tally AI — Cloudflare Worker (Gemini proxy)
-   Holds the Gemini key as a secret, restricts to Tally's origin,
-   and returns ONE short coaching suggestion.
-
-   Deploy:
-   1. Cloudflare dashboard → Workers & Pages → Create → Worker.
-   2. Replace the code with this file, Deploy.
-   3. Settings → Variables → add a SECRET named GEMINI_API_KEY.
-   4. Copy the Worker URL (…workers.dev) into Tally's app.js (AI_WORKER_URL).
+   modes: suggest, clarify, help, assist, reflect, stack
    ============================================================ */
 
 const ALLOWED_ORIGIN = 'https://gerasimosdap-png.github.io';
@@ -28,7 +21,15 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) { return json({ error: 'bad json' }, 400, cors); }
 
-    const mode = ['clarify', 'help', 'assist'].includes(body.mode) ? body.mode : 'suggest';
+    const mode = ['clarify', 'help', 'assist', 'reflect', 'stack'].includes(body.mode) ? body.mode : 'suggest';
+
+    const tasks = Array.isArray(body.tasks) ? body.tasks.slice(0, 40) : [];
+    const weekPct = Number.isFinite(body.weekPct) ? body.weekPct : 0;
+    const streak = Number.isFinite(body.streak) ? body.streak : 0;
+    const summary = tasks
+      .map(t => `- ${String(t.title || '').slice(0, 80)} (${String(t.type || '')}): ${String(t.progress || '').slice(0, 40)}`)
+      .join('\n');
+
     let prompt;
     if (mode === 'clarify') {
       const title = String(body.title || '').slice(0, 120);
@@ -38,21 +39,27 @@ export default {
 Task: ${title}`;
     } else if (mode === 'help') {
       const title = String(body.title || '').slice(0, 120);
-      const progress = String(body.progress || '').slice(0, 40);
+      const progress = String(body.progress || '').slice(0, 80);
       prompt =
-`The user is falling a little behind on a weekly habit in their tracker. Habit: "${title}". Progress so far this week: ${progress}. In under 40 words, warmly and with zero guilt, offer ONE tiny, easy way to get unstuck today — a two-minute version, a simple cue, or scaling it down. Plain, encouraging language. No medical, diet, or clinical advice. Just the tip.`;
+`The user is falling a little behind on a weekly habit in their tracker. Habit: "${title}". Context: ${progress}. In under 45 words, warmly and with zero guilt, offer ONE tiny, easy way to get unstuck today, tailored to that context — a two-minute version, a simple cue, or scaling it down. Plain, encouraging language. No medical, diet, or clinical advice. Just the tip.`;
     } else if (mode === 'assist') {
       const title = String(body.title || '').slice(0, 120);
       if (!title) return json({ error: 'no title' }, 400, cors);
       prompt =
 `The user has this task to do: "${title}". Actually help them do it — give a concrete, ready-to-use answer. For "plan a healthy meal" suggest one specific balanced meal; for a workout suggest a short routine; for "study X" a quick 10-minute plan; for an errand a brief checklist. Under 70 words, friendly and practical. Keep any food or exercise tips general and gentle — no medical, calorie, weight-loss, or clinical advice.`;
+    } else if (mode === 'stack') {
+      const title = String(body.title || '').slice(0, 120);
+      if (!title) return json({ error: 'no title' }, 400, cors);
+      const anchors = Array.isArray(body.anchors) ? body.anchors.slice(0, 10).map(a => String(a).slice(0, 60)) : [];
+      prompt =
+`The user wants to build this habit: "${title}". Habits they already do regularly: ${anchors.join(', ') || '(none given)'}. Suggest ONE habit stack in the form "After [an existing habit], I will [the new habit]." Pick the most natural existing anchor; if none fit, suggest a simple time-or-place cue instead. Under 20 words. Reply with only the one sentence.`;
+    } else if (mode === 'reflect') {
+      prompt =
+`You are a warm habit coach in a calm tracker called Tally. Write a short, encouraging end-of-week reflection (the week runs Monday to Sunday), under 65 words. Their week: ${weekPct}% of what they planned, a ${streak}-day streak.
+Tasks:
+${summary || '(no active tasks)'}
+Celebrate what they showed up for, gently note one pattern if you can see one, and frame it as identity ("you're becoming someone who…"). No guilt, no advice list, plain warm language. No preamble.`;
     } else {
-      const tasks = Array.isArray(body.tasks) ? body.tasks.slice(0, 40) : [];
-      const weekPct = Number.isFinite(body.weekPct) ? body.weekPct : 0;
-      const streak = Number.isFinite(body.streak) ? body.streak : 0;
-      const summary = tasks
-        .map(t => `- ${String(t.title || '').slice(0, 80)} (${String(t.type || '')}): ${String(t.progress || '').slice(0, 40)}`)
-        .join('\n');
       prompt =
 `You are a warm, encouraging habit coach inside a calm personal task-tracker called Tally, informed by James Clear's Atomic Habits.
 
@@ -75,7 +82,7 @@ Give ONE short suggestion (under 55 words) to help them this week. Be specific t
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 220, thinkingConfig: { thinkingBudget: 0 } },
+          generationConfig: { temperature: 0.7, maxOutputTokens: 240, thinkingConfig: { thinkingBudget: 0 } },
         }),
       });
     } catch (e) { return json({ error: 'upstream' }, 502, cors); }
@@ -88,7 +95,8 @@ Give ONE short suggestion (under 55 words) to help them this week. Be specific t
     try { text = data.candidates[0].content.parts[0].text.trim(); } catch (e) {}
     if (!text) return json({ error: 'empty' }, 502, cors);
 
-    return json(mode === 'clarify' ? { clarified: text } : mode === 'help' ? { help: text } : mode === 'assist' ? { assist: text } : { suggestion: text }, 200, cors);
+    const keyName = { clarify: 'clarified', help: 'help', assist: 'assist', reflect: 'reflection', stack: 'stack' }[mode] || 'suggestion';
+    return json({ [keyName]: text }, 200, cors);
   },
 };
 

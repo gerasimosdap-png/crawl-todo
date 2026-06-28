@@ -129,3 +129,24 @@ Each task already carries a category from the icon engine, which gives the AI co
 ### Sources
 - James Clear — *Atomic Habits* summary & the Four Laws of Behaviour Change: https://jamesclear.com/atomic-habits-summary
 - Free LLM API tiers in 2026 (Gemini, Groq, comparisons): https://openrouter.ai/blog/tutorials/free-llm-apis-compared/ · https://tokenmix.ai/blog/gemini-api-free-tier-limits
+
+---
+
+## Progress log — June 27, 2026
+
+**Shipped (all of the planned AI roadmap is now live):**
+- ✅ Icon vocabulary (88 keyword→emoji entries)
+- ✅ Date-scheduled "show-from / due-by" tasks (the Christmas-gifts case)
+- ✅ AI Phase A — task clarifier ("Sharpen") + meal/idea assistant ("Get an idea")
+- ✅ AI Phase B — proactive "want a hand?" check-in, now a 2-question interview (blocker → time) that tailors the tip
+- ✅ AI Phase C — **weekly reflection** (Stats button + a Sunday nudge on Today) and **habit-stacking** ("Cue" button: "After [existing habit], I will…")
+- ✅ Long-term **trends** on Stats: 8-week completions chart, all-time total, longest streak
+- ✅ In-app feedback button; instant-update service worker (v3)
+
+**Worker:** one Cloudflare Worker, 6 modes (suggest, clarify, help, assist, reflect, stack), Gemini 2.5 Flash, origin-locked. Live version cfdad445.
+
+### Still open (future ideas, nothing pending)
+- A faint "Coming up" peek for future-dated tasks on Today (currently they appear on their start date)
+- Per-task notes
+- Smarter, personalised reminder text
+- Identity/streak insight copy on the Stats trends

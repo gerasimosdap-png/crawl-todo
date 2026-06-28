@@ -286,6 +286,26 @@ const js = fs.readFileSync('app.js', 'utf8').replace(/if \('serviceWorker' in na
   window.setView('settings'); await wait(10);
   $('#feedbackBtn') ? ok('feedback button present in settings') : bad('feedback btn', 'missing');
 
+  // weekly reflection
+  window.fetch = async () => ({ ok: true, json: async () => ({ reflection: 'You showed up for Read all week — lovely.' }) });
+  window.setView('stats'); await wait(10);
+  $('#aiReflectBtn') ? ok('Reflect-on-my-week button on Stats') : bad('reflect btn', 'missing');
+  if ($('#aiReflectBtn')) { $('#aiReflectBtn').click(); await wait(40); }
+  ($('#aiOut .ai-card') && /showed up for Read/.test($('#aiOut').textContent) && /reflection/.test($('#aiOut').textContent)) ? ok('weekly reflection renders with disclosure') : bad('reflect render', $('#aiOut') && $('#aiOut').textContent);
+
+  // long-term trends
+  $$('#view-stats .stat-card').some(c => /Over time/.test(c.textContent)) ? ok('long-term trends card shows') : bad('trends card', 'missing');
+  /all-time/.test($('#view-stats').textContent) ? ok('all-time total + longest streak shown') : bad('trends nums', 'missing');
+
+  // habit-stacking (Cue)
+  window.fetch = async () => ({ ok: true, json: async () => ({ stack: 'After your morning coffee, read one page.' }) });
+  $('#fab').click(); await wait(30);
+  $('#ef-title').value = 'Read a chapter';
+  $('#ef-stack') ? ok('habit-stacking Cue button in editor') : bad('stack button', 'missing');
+  if ($('#ef-stack')) { $('#ef-stack').click(); await wait(40); }
+  ($('#ef-aiout .ai-card') && /morning coffee/.test($('#ef-aiout').textContent)) ? ok('habit-stacking suggests a cue') : bad('stack render', $('#ef-aiout') && $('#ef-aiout').textContent);
+  if (window.closeSheet) window.closeSheet();
+
   // ---- Google Calendar (read-only) ----
   const SS = JSON.parse(window.localStorage.getItem('tally.v1'));
   ('gcalConnected' in SS.settings) ? ok('calendar setting present in state') : bad('gcal setting', 'missing');
